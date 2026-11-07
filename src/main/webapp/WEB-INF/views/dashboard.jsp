@@ -47,17 +47,70 @@
             <c:remove var="errorMessage" scope="session"/>
         </c:if>
 
+        <c:if test="${not empty range.errorMessage}">
+            <div class="alert alert-danger">
+                <span><c:out value="${range.errorMessage}"/></span>
+            </div>
+        </c:if>
+
+        <!-- Date Range Filter Toolbar -->
+        <div class="filter-toolbar">
+            <div class="filter-pills">
+                <span style="font-size: 0.85rem; font-weight: 700; color: var(--secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 0.25rem;">
+                    Period:
+                </span>
+                <a href="${pageContext.request.contextPath}/dashboard?range=1M" 
+                   class="filter-pill ${range.filter == '1M' ? 'active' : ''}">Last 1 Month</a>
+                <a href="${pageContext.request.contextPath}/dashboard?range=6M" 
+                   class="filter-pill ${range.filter == '6M' ? 'active' : ''}">Last 6 Months</a>
+                <a href="${pageContext.request.contextPath}/dashboard?range=1Y" 
+                   class="filter-pill ${range.filter == '1Y' ? 'active' : ''}">Last 1 Year</a>
+                <a href="${pageContext.request.contextPath}/dashboard?range=ALL" 
+                   class="filter-pill ${range.filter == 'ALL' ? 'active' : ''}">All Time</a>
+            </div>
+
+            <form action="${pageContext.request.contextPath}/dashboard" method="get" class="custom-range-form">
+                <input type="hidden" name="range" value="CUSTOM">
+                <span style="font-size: 0.85rem; font-weight: 600; color: var(--secondary);">Custom:</span>
+                <input type="date" name="startDate" class="form-control" 
+                       value="<c:out value="${range.startDateString}"/>" required>
+                <span style="color: var(--text-muted); font-size: 0.85rem;">to</span>
+                <input type="date" name="endDate" class="form-control" 
+                       value="<c:out value="${range.endDateString}"/>" required>
+                <button type="submit" class="btn btn-secondary btn-sm" style="padding: 0.45rem 0.85rem;">Apply</button>
+            </form>
+        </div>
+
+        <!-- Active Date Indicator -->
+        <div style="margin-top: -1.25rem; margin-bottom: 1.75rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div class="range-indicator">
+                <span>Active Period:</span>
+                <strong>
+                    <c:choose>
+                        <c:when test="${not empty range.startDateString and not empty range.endDateString}">
+                            <c:out value="${range.startDateString}"/> to <c:out value="${range.endDateString}"/>
+                        </c:when>
+                        <c:otherwise>All Available Records</c:otherwise>
+                    </c:choose>
+                </strong>
+                <span style="color: var(--text-muted); margin-left: 0.5rem;">(${range.filter})</span>
+            </div>
+            <div style="font-size: 0.875rem; color: var(--text-muted);">
+                Transactions in range: <strong><c:out value="${summary.transactionCount}"/></strong>
+            </div>
+        </div>
+
         <div class="cards-grid">
             <div class="metric-card income">
                 <div class="label">Total Income</div>
                 <div class="amount">₹<fmt:formatNumber value="${summary.totalIncome}" pattern="#,##0.00"/></div>
-                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Cumulative earnings</div>
+                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Earnings in period</div>
             </div>
 
             <div class="metric-card expense">
                 <div class="label">Total Expenses</div>
                 <div class="amount">₹<fmt:formatNumber value="${summary.totalExpense}" pattern="#,##0.00"/></div>
-                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Cumulative spending</div>
+                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Spending in period</div>
             </div>
 
             <div class="metric-card balance">
@@ -75,7 +128,7 @@
         <div class="quick-actions">
             <h3 style="font-size: 1.15rem; color: var(--dark);">Quick Navigation & Management</h3>
             <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">
-                Manage records and track personal expenses seamlessly. Total recorded transactions: <strong><c:out value="${summary.transactionCount}"/></strong>
+                Manage records and track personal expenses seamlessly. Total recorded transactions in this period: <strong><c:out value="${summary.transactionCount}"/></strong>
             </p>
             <div class="action-buttons">
                 <a href="${pageContext.request.contextPath}/viewTransaction" class="btn btn-secondary">
@@ -89,4 +142,3 @@
     </div>
 </body>
 </html>
-
