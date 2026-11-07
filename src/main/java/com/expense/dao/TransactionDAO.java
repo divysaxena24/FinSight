@@ -1,7 +1,7 @@
 package com.expense.dao;
 
 import java.sql.Connection;
-//import java.sql.Date;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
@@ -10,170 +10,253 @@ import java.util.List;
 import com.expense.model.Transaction;
 import com.expense.util.DBConnection;
 
-public class TransactionDAO
-{
-	// Add Transaction
-    public boolean addTransaction(Transaction transaction)
-    {
+public class TransactionDAO {
 
-        boolean status = false;
-        try 
-        {
-            Connection con = DBConnection.getConnection();
+    // Add Transaction
+    public boolean addTransaction(Transaction transaction) {
+        if (transaction == null) {
+            return false;
+        }
 
-            String sql = "INSERT INTO transactions(user_id,type,category,amount,description,transaction_date) VALUES(?,?,?,?,?,?)";
+        String sql = "INSERT INTO transactions(user_id, type, category, amount, description, transaction_date) "
+                   + "VALUES(?, ?, ?, ?, ?, ?)";
 
-            PreparedStatement ps = con.prepareStatement(sql);
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+
+            if (con == null || ps == null) {
+                return false;
+            }
 
             ps.setInt(1, transaction.getUserId());
             ps.setString(2, transaction.getType());
             ps.setString(3, transaction.getCategory());
             ps.setDouble(4, transaction.getAmount());
             ps.setString(5, transaction.getDescription());
-            ps.setDate(6, transaction.getTransactionDate());
 
-            status = ps.executeUpdate() > 0;
+            String dateStr = transaction.getTransactionDate() != null
+                    ? transaction.getTransactionDate().toString()
+                    : new Date(System.currentTimeMillis()).toString();
+            ps.setString(6, dateStr);
 
-        } 
-        catch (Exception e) 
-        {
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
             e.printStackTrace();
+            return false;
         }
-
-        return status;
     }
 
-    // View Transactions
-    public List<Transaction> getTransactionsByUser(int userId) 
-    {
-
+    // View Transactions for a user
+    public List<Transaction> getTransactionsByUser(int userId) {
         List<Transaction> list = new ArrayList<>();
+        String sql = "SELECT id, user_id, type, category, amount, description, transaction_date "
+                   + "FROM transactions WHERE user_id = ? ORDER BY transaction_date DESC, id DESC";
 
-        try 
-        {
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
 
-            Connection con = DBConnection.getConnection();
-
-            String sql = "SELECT * FROM transactions WHERE user_id=? ORDER BY transaction_date DESC";
-
-            PreparedStatement ps = con.prepareStatement(sql);
+            if (con == null || ps == null) {
+                return list;
+            }
 
             ps.setInt(1, userId);
 
-            ResultSet rs = ps.executeQuery();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Transaction t = new Transaction();
+                    t.setId(rs.getInt("id"));
+                    t.setUserId(rs.getInt("user_id"));
+                    t.setType(rs.getString("type"));
+                    t.setCategory(rs.getString("category"));
+                    t.setAmount(rs.getDouble("amount"));
+                    t.setDescription(rs.getString("description"));
 
-            while (rs.next()) 
-            {
-
-                Transaction t = new Transaction();
-
-                t.setId(rs.getInt("id"));
-                t.setUserId(rs.getInt("user_id"));
-                t.setType(rs.getString("type"));
-                t.setCategory(rs.getString("category"));
-                t.setAmount(rs.getDouble("amount"));
-                t.setDescription(rs.getString("description"));
-                t.setTransactionDate(rs.getDate("transaction_date"));
-
-                list.add(t);
+                    String dateVal = rs.getString("transaction_date");
+                    if (dateVal != null) {
+                        try {
+                            t.setTransactionDate(Date.valueOf(dateVal));
+                        } catch (Exception e) {
+                            // Fallback if timestamp format
+                            t.setTransactionDate(new Date(System.currentTimeMillis()));
+                        }
+                    }
+                    list.add(t);
+                }
             }
 
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
         return list;
     }
 
-    // Update Transaction
-    public boolean updateTransaction(Transaction transaction) 
-    {
+    // Secure Update Transaction enforcing user ownership
+    public boolean updateTransaction(Transaction transaction, int userId) {
+        if (transaction == null) {
+            return false;
+        }
 
-        boolean status = false;
+        String sql = "UPDATE transactions SET type = ?, category = ?, amount = ?, description = ?, transaction_date = ? "
+                   + "WHERE id = ? AND user_id = ?";
 
-        try 
-        {
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
 
-            Connection con = DBConnection.getConnection();
-
-            String sql = "UPDATE transactions SET type=?,category=?,amount=?,description=?,transaction_date=? WHERE id=?";
-
-            PreparedStatement ps = con.prepareStatement(sql);
+            if (con == null || ps == null) {
+                return false;
+            }
 
             ps.setString(1, transaction.getType());
             ps.setString(2, transaction.getCategory());
             ps.setDouble(3, transaction.getAmount());
             ps.setString(4, transaction.getDescription());
-            ps.setDate(5, transaction.getTransactionDate());
+
+            String dateStr = transaction.getTransactionDate() != null
+                    ? transaction.getTransactionDate().toString()
+                    : new Date(System.currentTimeMillis()).toString();
+            ps.setString(5, dateStr);
+
             ps.setInt(6, transaction.getId());
+            ps.setInt(7, userId);
 
-            status = ps.executeUpdate() > 0;
+            return ps.executeUpdate() > 0;
 
-        } 
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             e.printStackTrace();
+            return false;
         }
-
-        return status;
     }
 
-    // Delete Transaction
-    public boolean deleteTransaction(int id) 
-    {
+    // Backward-compatible updateTransaction overload
+    public boolean updateTransaction(Transaction transaction) {
+        if (transaction == null) {
+            return false;
+        }
+        return updateTransaction(transaction, transaction.getUserId());
+    }
 
-        boolean status = false;
+    // Secure Delete Transaction enforcing user ownership
+    public boolean deleteTransaction(int id, int userId) {
+        String sql = "DELETE FROM transactions WHERE id = ? AND user_id = ?";
 
-        try 
-        {
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
 
-            Connection con = DBConnection.getConnection();
-
-            String sql = "DELETE FROM transactions WHERE id=?";
-
-            PreparedStatement ps = con.prepareStatement(sql);
+            if (con == null || ps == null) {
+                return false;
+            }
 
             ps.setInt(1, id);
+            ps.setInt(2, userId);
 
-            status = ps.executeUpdate() > 0;
+            return ps.executeUpdate() > 0;
 
-        } 
-        catch (Exception e) 
-        {
+        } catch (Exception e) {
             e.printStackTrace();
+            return false;
         }
-
-        return status;
     }
-    public Transaction getTransactionById(int id) {
 
+    // Backward-compatible deleteTransaction
+    public boolean deleteTransaction(int id) {
+        String sql = "DELETE FROM transactions WHERE id = ?";
+
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+
+            if (con == null || ps == null) {
+                return false;
+            }
+
+            ps.setInt(1, id);
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // Secure Get Transaction by ID with user ownership check
+    public Transaction getTransactionById(int id, int userId) {
         Transaction transaction = null;
+        String sql = "SELECT id, user_id, type, category, amount, description, transaction_date "
+                   + "FROM transactions WHERE id = ? AND user_id = ?";
 
-        try {
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
 
-            Connection con = DBConnection.getConnection();
+            if (con == null || ps == null) {
+                return null;
+            }
 
-            String sql = "SELECT * FROM transactions WHERE id=?";
+            ps.setInt(1, id);
+            ps.setInt(2, userId);
 
-            PreparedStatement ps = con.prepareStatement(sql);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    transaction = new Transaction();
+                    transaction.setId(rs.getInt("id"));
+                    transaction.setUserId(rs.getInt("user_id"));
+                    transaction.setType(rs.getString("type"));
+                    transaction.setCategory(rs.getString("category"));
+                    transaction.setAmount(rs.getDouble("amount"));
+                    transaction.setDescription(rs.getString("description"));
+
+                    String dateVal = rs.getString("transaction_date");
+                    if (dateVal != null) {
+                        try {
+                            transaction.setTransactionDate(Date.valueOf(dateVal));
+                        } catch (Exception e) {
+                            transaction.setTransactionDate(new Date(System.currentTimeMillis()));
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return transaction;
+    }
+
+    // Backward-compatible getTransactionById
+    public Transaction getTransactionById(int id) {
+        Transaction transaction = null;
+        String sql = "SELECT id, user_id, type, category, amount, description, transaction_date "
+                   + "FROM transactions WHERE id = ?";
+
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+
+            if (con == null || ps == null) {
+                return null;
+            }
 
             ps.setInt(1, id);
 
-            ResultSet rs = ps.executeQuery();
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    transaction = new Transaction();
+                    transaction.setId(rs.getInt("id"));
+                    transaction.setUserId(rs.getInt("user_id"));
+                    transaction.setType(rs.getString("type"));
+                    transaction.setCategory(rs.getString("category"));
+                    transaction.setAmount(rs.getDouble("amount"));
+                    transaction.setDescription(rs.getString("description"));
 
-            if (rs.next()) {
-
-                transaction = new Transaction();
-
-                transaction.setId(rs.getInt("id"));
-                transaction.setUserId(rs.getInt("user_id"));
-                transaction.setType(rs.getString("type"));
-                transaction.setCategory(rs.getString("category"));
-                transaction.setAmount(rs.getDouble("amount"));
-                transaction.setDescription(rs.getString("description"));
-                transaction.setTransactionDate(rs.getDate("transaction_date"));
+                    String dateVal = rs.getString("transaction_date");
+                    if (dateVal != null) {
+                        try {
+                            transaction.setTransactionDate(Date.valueOf(dateVal));
+                        } catch (Exception e) {
+                            transaction.setTransactionDate(new Date(System.currentTimeMillis()));
+                        }
+                    }
+                }
             }
 
         } catch (Exception e) {
@@ -184,32 +267,26 @@ public class TransactionDAO
     }
 
     // Total Income
-    public double getTotalIncome(int userId) 
-    {
+    public double getTotalIncome(int userId) {
+        double total = 0.0;
+        String sql = "SELECT COALESCE(SUM(amount), 0.0) FROM transactions WHERE user_id = ? AND type = 'Income'";
 
-        double total = 0;
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
 
-        try 
-        {
-
-            Connection con = DBConnection.getConnection();
-
-            String sql = "SELECT SUM(amount) FROM transactions WHERE user_id=? AND type='Income'";
-
-            PreparedStatement ps = con.prepareStatement(sql);
+            if (con == null || ps == null) {
+                return 0.0;
+            }
 
             ps.setInt(1, userId);
 
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) 
-            {
-                total = rs.getDouble(1);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    total = rs.getDouble(1);
+                }
             }
 
-        } 
-        catch (Exception e) 
-        {
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
@@ -217,36 +294,29 @@ public class TransactionDAO
     }
 
     // Total Expense
-    public double getTotalExpense(int userId) 
-    {
+    public double getTotalExpense(int userId) {
+        double total = 0.0;
+        String sql = "SELECT COALESCE(SUM(amount), 0.0) FROM transactions WHERE user_id = ? AND type = 'Expense'";
 
-        double total = 0;
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
 
-        try 
-        {
-
-            Connection con = DBConnection.getConnection();
-
-            String sql = "SELECT SUM(amount) FROM transactions WHERE user_id=? AND type='Expense'";
-
-            PreparedStatement ps = con.prepareStatement(sql);
+            if (con == null || ps == null) {
+                return 0.0;
+            }
 
             ps.setInt(1, userId);
 
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) 
-            {
-                total = rs.getDouble(1);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    total = rs.getDouble(1);
+                }
             }
 
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
         return total;
     }
-
 }

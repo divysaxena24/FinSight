@@ -28,3 +28,4 @@ Original architecture and base CRUD modules by PoojithaCoder-10 under the MIT / 
 mvn clean package
 ```
 Output artifact: `target/FinSight.war`
+

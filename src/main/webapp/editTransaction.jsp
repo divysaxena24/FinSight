@@ -3,15 +3,28 @@
 
 <%@ page import="com.expense.dao.TransactionDAO"%>
 <%@ page import="com.expense.model.Transaction"%>
+<%@ page import="com.expense.model.User"%>
 
 <%
-int id = Integer.parseInt(request.getParameter("id"));
+User user = (User) session.getAttribute("user");
+if (user == null) {
+    response.sendRedirect("login.jsp");
+    return;
+}
 
+String idStr = request.getParameter("id");
+if (idStr == null || idStr.trim().isEmpty()) {
+    response.sendRedirect("viewTransaction.jsp");
+    return;
+}
+
+int id = Integer.parseInt(idStr);
 TransactionDAO dao = new TransactionDAO();
 
-Transaction t = dao.getTransactionById(id);
+// Secure retrieval: only allow fetching if it belongs to current user
+Transaction t = dao.getTransactionById(id, user.getId());
 
-if(t == null){
+if (t == null) {
     response.sendRedirect("viewTransaction.jsp");
     return;
 }
@@ -50,34 +63,30 @@ h2{
     margin-bottom:20px;
 }
 
+.form-group{
+    margin-bottom:15px;
+}
+
 label{
     display:block;
-    margin-top:15px;
     margin-bottom:5px;
     font-weight:bold;
 }
 
-input,
-select,
-textarea{
+input, select, textarea{
     width:100%;
     padding:10px;
     border:1px solid #ccc;
     border-radius:5px;
 }
 
-textarea{
-    height:80px;
-    resize:none;
-}
-
 button{
     width:100%;
-    margin-top:20px;
-    padding:12px;
+    padding:10px;
     background:#28a745;
-    color:white;
     border:none;
+    color:white;
+    font-size:16px;
     border-radius:5px;
     cursor:pointer;
 }
@@ -86,17 +95,15 @@ button:hover{
     background:#218838;
 }
 
-a{
+.back-link{
     display:block;
     text-align:center;
     margin-top:15px;
-    text-decoration:none;
 }
 
 </style>
 
 </head>
-
 <body>
 
 <div class="container">
@@ -105,64 +112,41 @@ a{
 
 <form action="updateTransaction" method="post">
 
-<input type="hidden" name="id" value="<%=t.getId()%>">
+    <input type="hidden" name="id" value="<%=t.getId()%>">
 
-<label>Type</label>
+    <div class="form-group">
+        <label>Type</label>
+        <select name="type" required>
+            <option value="Income" <%= "Income".equals(t.getType()) ? "selected" : "" %>>Income</option>
+            <option value="Expense" <%= "Expense".equals(t.getType()) ? "selected" : "" %>>Expense</option>
+        </select>
+    </div>
 
-<select name="type">
+    <div class="form-group">
+        <label>Category</label>
+        <input type="text" name="category" value="<%=t.getCategory()%>" required>
+    </div>
 
-<option value="Income"
-<%=t.getType().equals("Income")?"selected":""%>>
+    <div class="form-group">
+        <label>Amount</label>
+        <input type="number" step="0.01" name="amount" value="<%=t.getAmount()%>" required>
+    </div>
 
-Income
+    <div class="form-group">
+        <label>Description</label>
+        <textarea name="description"><%=t.getDescription()%></textarea>
+    </div>
 
-</option>
+    <div class="form-group">
+        <label>Date</label>
+        <input type="date" name="transactionDate" value="<%=t.getTransactionDate()%>" required>
+    </div>
 
-<option value="Expense"
-<%=t.getType().equals("Expense")?"selected":""%>>
-
-Expense
-
-</option>
-
-</select>
-
-<label>Category</label>
-
-<input type="text"
-name="category"
-value="<%=t.getCategory()%>">
-
-<label>Amount</label>
-
-<input
-type="number"
-step="0.01"
-name="amount"
-value="<%=t.getAmount()%>">
-
-<label>Description</label>
-
-<textarea
-name="description"><%=t.getDescription()%></textarea>
-
-<label>Date</label>
-
-<input type="date" name="transactionDate" value="<%=t.getTransactionDate()%>">
-
-<button type="submit">
-
-Update Transaction
-
-</button>
+    <button type="submit">Update Transaction</button>
 
 </form>
 
-<a href="viewTransaction.jsp">
-
-Back
-
-</a>
+<a href="viewTransaction.jsp" class="back-link">Back to Transactions</a>
 
 </div>
 

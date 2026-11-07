@@ -4,82 +4,90 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
+import org.mindrot.jbcrypt.BCrypt;
+
 import com.expense.model.User;
 import com.expense.util.DBConnection;
 
-public class UserDAO 
-{
+public class UserDAO {
 
-    // Register User
-    public boolean registerUser(User user) 
-    {
-    	boolean status = false;
-
-        try
-        {
-            Connection con = DBConnection.getConnection();
-
-            String sql = "INSERT INTO user(name,email,password) VALUES(?,?,?)";
-
-            PreparedStatement ps = con.prepareStatement(sql);
-
-            ps.setString(1, user.getName());
-            ps.setString(2, user.getEmail());
-            ps.setString(3, user.getPassword());
-
-            int row = ps.executeUpdate();
-
-            if (row > 0)
-                status = true;
-
-        } 
-        catch (Exception e)
-        {
-            e.printStackTrace();
+    // Register User with BCrypt password hashing
+    public boolean registerUser(User user) {
+        if (user == null || user.getEmail() == null || user.getPassword() == null) {
+            return false;
         }
 
-        return status;
-    }
+        String sql = "INSERT INTO user(name, email, password) VALUES(?, ?, ?)";
 
-    // Login User
-    public User loginUser(String email, String password)
-    {
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
 
-        User user = null;
-
-        try
-        {
-
-            Connection con = DBConnection.getConnection();
-
-            String sql = "SELECT * FROM user WHERE email=? AND password=?";
-
-            PreparedStatement ps = con.prepareStatement(sql);
-
-            ps.setString(1, email);
-            ps.setString(2, password);
-
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next())
-            {
-
-                user = new User();
-
-                user.setId(rs.getInt("id"));
-                user.setName(rs.getString("name"));
-                user.setEmail(rs.getString("email"));
-
+            if (con == null || ps == null) {
+                return false;
             }
 
-        } 
-        catch (Exception e) 
-        {
+            String hashedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt(12));
 
+            ps.setString(1, user.getName());
+            ps.setString(2, user.getEmail().trim().toLowerCase());
+            ps.setString(3, hashedPassword);
+
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            // Catches SQLite unique constraint violation (SQLITE_CONSTRAINT_UNIQUE)
             e.printStackTrace();
+            return false;
+        }
+    }
 
+    // Login User with BCrypt verification (and plain text backward-compatibility fallback)
+    public User loginUser(String email, String password) {
+        if (email == null || password == null) {
+            return null;
         }
 
-        return user;
+        String sql = "SELECT id, name, email, password FROM user WHERE email = ?";
+
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+
+            if (con == null || ps == null) {
+                return null;
+            }
+
+            ps.setString(1, email.trim().toLowerCase());
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String storedPassword = rs.getString("password");
+                    boolean passwordMatches = false;
+
+                    if (storedPassword != null && storedPassword.startsWith("$2a$")) {
+                        try {
+                            passwordMatches = BCrypt.checkpw(password, storedPassword);
+                        } catch (Exception ex) {
+                            passwordMatches = false;
+                        }
+                    } else if (storedPassword != null && storedPassword.equals(password)) {
+                        // Plaintext fallback
+                        passwordMatches = true;
+                    }
+
+                    if (passwordMatches) {
+                        User user = new User();
+                        user.setId(rs.getInt("id"));
+                        user.setName(rs.getString("name"));
+                        user.setEmail(rs.getString("email"));
+                        return user;
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
     }
 }
