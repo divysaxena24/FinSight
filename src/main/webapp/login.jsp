@@ -5,7 +5,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Expense Tracker | Login</title>
+<title>FinSight | Login</title>
 
 <style>
 
@@ -174,7 +174,7 @@ button:hover{
 
 <div class="header">
     <span class="icon">💰</span>
-    <span class="title">Expense Tracker</span>
+    <span class="title">FinSight</span>
 </div>
 
 <!-- Main Container -->
@@ -230,7 +230,7 @@ button:hover{
 
             <p>
                 Login to your
-                <span>Expense Management System</span>
+                <span>FinSight</span>
                 and easily manage your income, expenses,
                 transactions, and savings.
             </p>

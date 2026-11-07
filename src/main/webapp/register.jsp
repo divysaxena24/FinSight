@@ -5,7 +5,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Expense Tracker | Register</title>
+<title>FinSight | Register</title>
 
 <style>
 
@@ -188,7 +188,7 @@ button:hover{
 <!-- Header -->
 
 <div class="header">
-    <div class="logo">💰 Expense Tracker</div>
+    <div class="logo">💰 FinSight</div>
 </div>
 
 <!-- Main -->
@@ -251,7 +251,7 @@ button:hover{
 
         <div class="content">
 
-            <h1>Welcome to Expense Tracker</h1>
+            <h1>Welcome to FinSight</h1>
 
             <p>
                 Create your account and securely manage your income,
