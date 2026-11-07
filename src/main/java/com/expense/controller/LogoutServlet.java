@@ -2,21 +2,31 @@ package com.expense.controller;
 
 import java.io.IOException;
 
+import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.*;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 @WebServlet("/logout")
-public class LogoutServlet extends HttpServlet
-{
-	private static final long serialVersionUID = 1L;
+public class LogoutServlet extends HttpServlet {
 
-	protected void doGet(HttpServletRequest request,HttpServletResponse response)throws IOException
-	{
+    private static final long serialVersionUID = 1L;
 
-        HttpSession session = request.getSession();
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
 
-        session.invalidate();
+        HttpSession session = request.getSession(false);
 
-        response.sendRedirect("login.jsp");
+        if (session != null) {
+            session.invalidate();
+        }
+
+        // Redirect to login with logout notice
+        HttpSession newSession = request.getSession(true);
+        newSession.setAttribute("successMessage", "You have been successfully logged out.");
+        response.sendRedirect("login");
     }
 }

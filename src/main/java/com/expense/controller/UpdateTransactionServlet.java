@@ -1,11 +1,9 @@
 package com.expense.controller;
 
 import java.io.IOException;
-import java.sql.Date;
 
-import com.expense.dao.TransactionDAO;
-import com.expense.model.Transaction;
 import com.expense.model.User;
+import com.expense.service.TransactionService;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -18,6 +16,7 @@ import jakarta.servlet.http.HttpSession;
 public class UpdateTransactionServlet extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
+    private final TransactionService transactionService = new TransactionService();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
@@ -27,32 +26,48 @@ public class UpdateTransactionServlet extends HttpServlet {
         User user = (session != null) ? (User) session.getAttribute("user") : null;
 
         if (user == null) {
-            response.sendRedirect("login.jsp");
+            response.sendRedirect("login");
             return;
         }
 
+        String idStr = request.getParameter("id");
+        String type = request.getParameter("type");
+        String category = request.getParameter("category");
+        String amountStr = request.getParameter("amount");
+        String description = request.getParameter("description");
+        String transactionDate = request.getParameter("transactionDate");
+
+        if (idStr == null || type == null || category == null || amountStr == null || transactionDate == null) {
+            session.setAttribute("errorMessage", "All required fields must be provided.");
+            response.sendRedirect("viewTransaction");
+            return;
+        }
+
+        int id;
+        double amount;
         try {
-            Transaction transaction = new Transaction();
-            transaction.setId(Integer.parseInt(request.getParameter("id")));
-            transaction.setUserId(user.getId());
-            transaction.setType(request.getParameter("type"));
-            transaction.setCategory(request.getParameter("category"));
-            transaction.setAmount(Double.parseDouble(request.getParameter("amount")));
-            transaction.setDescription(request.getParameter("description"));
-            transaction.setTransactionDate(Date.valueOf(request.getParameter("transactionDate")));
-
-            TransactionDAO dao = new TransactionDAO();
-
-            // Secure update: verifies that transaction belongs to the logged-in user
-            if (dao.updateTransaction(transaction, user.getId())) {
-                response.sendRedirect("viewTransaction.jsp");
-            } else {
-                response.sendRedirect("editTransaction.jsp?id=" + transaction.getId());
+            id = Integer.parseInt(idStr.trim());
+            amount = Double.parseDouble(amountStr.trim());
+            if (amount <= 0) {
+                session.setAttribute("errorMessage", "Amount must be greater than zero.");
+                response.sendRedirect("editTransaction?id=" + id);
+                return;
             }
+        } catch (NumberFormatException e) {
+            session.setAttribute("errorMessage", "Invalid numeric values provided.");
+            response.sendRedirect("viewTransaction");
+            return;
+        }
 
-        } catch (Exception e) {
-            e.printStackTrace();
-            response.sendRedirect("editTransaction.jsp");
+        boolean updated = transactionService.updateTransaction(
+                id, user.getId(), type, category, amount, description, transactionDate);
+
+        if (updated) {
+            session.setAttribute("successMessage", "Transaction updated successfully!");
+            response.sendRedirect("viewTransaction");
+        } else {
+            session.setAttribute("errorMessage", "Failed to update transaction or access denied.");
+            response.sendRedirect("editTransaction?id=" + id);
         }
     }
 }

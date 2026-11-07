@@ -1,50 +1,70 @@
 package com.expense.controller;
 
 import java.io.IOException;
-import java.sql.Date;
 
-import com.expense.dao.TransactionDAO;
-import com.expense.model.Transaction;
 import com.expense.model.User;
+import com.expense.service.TransactionService;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.*;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 @WebServlet("/addTransaction")
-public class AddTransactionServlet extends HttpServlet
-{
-	private static final long serialVersionUID = 1L;
+public class AddTransactionServlet extends HttpServlet {
 
-	protected void doPost(HttpServletRequest request,HttpServletResponse response) throws ServletException, IOException 
-	{
+    private static final long serialVersionUID = 1L;
+    private final TransactionService transactionService = new TransactionService();
 
-        HttpSession session = request.getSession();
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
 
-        User user = (User) session.getAttribute("user");
+        HttpSession session = request.getSession(false);
+        User user = (session != null) ? (User) session.getAttribute("user") : null;
 
-        Transaction transaction = new Transaction();
+        if (user == null) {
+            response.sendRedirect("login");
+            return;
+        }
 
-        transaction.setUserId(user.getId());
-        transaction.setType(request.getParameter("type"));
-        transaction.setCategory(request.getParameter("category"));
-        transaction.setAmount(Double.parseDouble(request.getParameter("amount")));
-        transaction.setDescription(request.getParameter("description"));
-        transaction.setTransactionDate(Date.valueOf(request.getParameter("transactionDate")));
+        String type = request.getParameter("type");
+        String category = request.getParameter("category");
+        String amountStr = request.getParameter("amount");
+        String description = request.getParameter("description");
+        String transactionDate = request.getParameter("transactionDate");
 
-        TransactionDAO dao = new TransactionDAO();
+        if (type == null || category == null || amountStr == null || transactionDate == null) {
+            session.setAttribute("errorMessage", "All required fields must be filled.");
+            response.sendRedirect("addTransactionPage");
+            return;
+        }
 
-        if (dao.addTransaction(transaction)) 
-        {
+        double amount;
+        try {
+            amount = Double.parseDouble(amountStr.trim());
+            if (amount <= 0) {
+                session.setAttribute("errorMessage", "Amount must be greater than zero.");
+                response.sendRedirect("addTransactionPage");
+                return;
+            }
+        } catch (NumberFormatException e) {
+            session.setAttribute("errorMessage", "Invalid amount entered. Please provide a valid number.");
+            response.sendRedirect("addTransactionPage");
+            return;
+        }
 
-            response.sendRedirect("dashboard.jsp");
+        boolean created = transactionService.createTransaction(
+                user.getId(), type, category, amount, description, transactionDate);
 
-        } 
-        else 
-        {
-
-            response.sendRedirect("addTransaction.jsp");
-
+        if (created) {
+            session.setAttribute("successMessage", "Transaction added successfully!");
+            response.sendRedirect("dashboard");
+        } else {
+            session.setAttribute("errorMessage", "Failed to save transaction. Please check your inputs.");
+            response.sendRedirect("addTransactionPage");
         }
     }
 }

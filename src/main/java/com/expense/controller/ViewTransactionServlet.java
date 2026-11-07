@@ -39,3 +39,4 @@ public class ViewTransactionServlet extends HttpServlet {
         request.getRequestDispatcher("/WEB-INF/views/viewTransaction.jsp").forward(request, response);
     }
 }
+

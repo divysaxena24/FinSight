@@ -31,3 +31,4 @@ public class AddTransactionPageServlet extends HttpServlet {
         request.getRequestDispatcher("/WEB-INF/views/addTransaction.jsp").forward(request, response);
     }
 }
+
