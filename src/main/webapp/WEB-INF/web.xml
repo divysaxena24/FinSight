@@ -7,7 +7,7 @@
     <display-name>FinSight</display-name>
 
     <welcome-file-list>
-        <welcome-file>login.jsp</welcome-file>
+        <welcome-file>login</welcome-file>
     </welcome-file-list>
 
 </web-app>
