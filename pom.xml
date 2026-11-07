@@ -32,12 +32,18 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Jakarta Standard Tag Library API & Implementation -->
+        <!-- Jakarta Standard Tag Library API (Tomcat 10.1) -->
         <dependency>
             <groupId>jakarta.servlet.jsp.jstl</groupId>
             <artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
             <version>3.0.0</version>
-            <scope>provided</scope>
+        </dependency>
+
+        <!-- GlassFish JSTL Implementation for Jakarta EE 10 -->
+        <dependency>
+            <groupId>org.glassfish.web</groupId>
+            <artifactId>jakarta.servlet.jsp.jstl</artifactId>
+            <version>3.0.1</version>
         </dependency>
 
         <!-- SQLite JDBC Driver -->

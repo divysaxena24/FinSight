@@ -12,41 +12,49 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
-@WebServlet("/login")
+@WebServlet(urlPatterns = {"/login", "/login.jsp"})
 public class LoginServlet extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
+    private final UserDAO userDAO = new UserDAO();
 
     @Override
-    protected void doGet(HttpServletRequest request,
-                          HttpServletResponse response)
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        response.sendRedirect("login.jsp");
+        HttpSession session = request.getSession(false);
+        if (session != null && session.getAttribute("user") != null) {
+            response.sendRedirect("dashboard");
+            return;
+        }
+
+        request.getRequestDispatcher("/WEB-INF/views/login.jsp").forward(request, response);
     }
 
     @Override
-    protected void doPost(HttpServletRequest request,
-                           HttpServletResponse response)
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
         String email = request.getParameter("email");
         String password = request.getParameter("password");
 
-        UserDAO dao = new UserDAO();
+        if (email == null || email.trim().isEmpty() || password == null || password.trim().isEmpty()) {
+            request.setAttribute("errorMessage", "Email and password are required.");
+            request.getRequestDispatcher("/WEB-INF/views/login.jsp").forward(request, response);
+            return;
+        }
 
-        User user = dao.loginUser(email, password);
+        User user = userDAO.loginUser(email.trim(), password);
 
         if (user != null) {
-
-            HttpSession session = request.getSession();
+            HttpSession session = request.getSession(true);
             session.setAttribute("user", user);
-
-            response.sendRedirect("dashboard.jsp");
-
+            session.setAttribute("successMessage", "Welcome back, " + user.getName() + "!");
+            response.sendRedirect("dashboard");
         } else {
-
-            response.sendRedirect("login.jsp");
+            request.setAttribute("errorMessage", "Invalid email or password. Please try again.");
+            request.setAttribute("enteredEmail", email.trim());
+            request.getRequestDispatcher("/WEB-INF/views/login.jsp").forward(request, response);
         }
     }
 }
