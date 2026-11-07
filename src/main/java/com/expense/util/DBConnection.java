@@ -84,6 +84,7 @@ public class DBConnection {
 
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_tx_user_date_type ON transactions(user_id, transaction_date, type);");
         } catch (SQLException e) {
             e.printStackTrace();
         }

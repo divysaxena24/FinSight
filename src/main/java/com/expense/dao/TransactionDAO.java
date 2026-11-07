@@ -319,4 +319,156 @@ public class TransactionDAO {
 
         return total;
     }
+
+    // Raw summary container for database aggregation results
+    public static class SummaryRecord {
+        private final double totalIncome;
+        private final double totalExpense;
+        private final int count;
+
+        public SummaryRecord(double totalIncome, double totalExpense, int count) {
+            this.totalIncome = totalIncome;
+            this.totalExpense = totalExpense;
+            this.count = count;
+        }
+
+        public double getTotalIncome() {
+            return totalIncome;
+        }
+
+        public double getTotalExpense() {
+            return totalExpense;
+        }
+
+        public int getCount() {
+            return count;
+        }
+    }
+
+    // Filtered Financial Summary Aggregation Query (Inclusive dates)
+    public SummaryRecord getSummaryByDateRange(int userId, String startDate, String endDate) {
+        String sql = "SELECT "
+                   + "COALESCE(SUM(CASE WHEN type = 'Income' THEN amount ELSE 0 END), 0.0) AS income, "
+                   + "COALESCE(SUM(CASE WHEN type = 'Expense' THEN amount ELSE 0 END), 0.0) AS expense, "
+                   + "COUNT(id) AS tx_count "
+                   + "FROM transactions "
+                   + "WHERE user_id = ? AND transaction_date >= ? AND transaction_date <= ?";
+
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+
+            if (con == null || ps == null) {
+                return new SummaryRecord(0.0, 0.0, 0);
+            }
+
+            ps.setInt(1, userId);
+            ps.setString(2, startDate);
+            ps.setString(3, endDate);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return new SummaryRecord(rs.getDouble("income"), rs.getDouble("expense"), rs.getInt("tx_count"));
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return new SummaryRecord(0.0, 0.0, 0);
+    }
+
+    // Record holding aggregated monthly values
+    public static class MonthlyRecord {
+        private final String yearMonth; // e.g. "2026-11"
+        private final double income;
+        private final double expense;
+
+        public MonthlyRecord(String yearMonth, double income, double expense) {
+            this.yearMonth = yearMonth;
+            this.income = income;
+            this.expense = expense;
+        }
+
+        public String getYearMonth() {
+            return yearMonth;
+        }
+
+        public double getIncome() {
+            return income;
+        }
+
+        public double getExpense() {
+            return expense;
+        }
+    }
+
+    // Monthly income and expense totals aggregated via SQLite strftime
+    public List<MonthlyRecord> getMonthlyIncomeAndExpenses(int userId, String startDate, String endDate) {
+        List<MonthlyRecord> results = new ArrayList<>();
+        String sql = "SELECT "
+                   + "strftime('%Y-%m', transaction_date) AS ym, "
+                   + "COALESCE(SUM(CASE WHEN type = 'Income' THEN amount ELSE 0 END), 0.0) AS total_income, "
+                   + "COALESCE(SUM(CASE WHEN type = 'Expense' THEN amount ELSE 0 END), 0.0) AS total_expense "
+                   + "FROM transactions "
+                   + "WHERE user_id = ? AND transaction_date >= ? AND transaction_date <= ? "
+                   + "GROUP BY ym "
+                   + "ORDER BY ym ASC";
+
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+
+            if (con == null || ps == null) {
+                return results;
+            }
+
+            ps.setInt(1, userId);
+            ps.setString(2, startDate);
+            ps.setString(3, endDate);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String ym = rs.getString("ym");
+                    if (ym != null) {
+                        results.add(new MonthlyRecord(
+                                ym,
+                                rs.getDouble("total_income"),
+                                rs.getDouble("total_expense")
+                        ));
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return results;
+    }
+
+    // Find the earliest transaction date for a user
+    public String getEarliestTransactionDate(int userId) {
+        String sql = "SELECT MIN(transaction_date) FROM transactions WHERE user_id = ?";
+
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+
+            if (con == null || ps == null) {
+                return null;
+            }
+
+            ps.setInt(1, userId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString(1);
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
 }
