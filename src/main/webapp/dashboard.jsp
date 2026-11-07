@@ -109,7 +109,7 @@ h2{
 
 <div class="container">
 
-    <h1>Expense Management System</h1>
+    <h1>FinSight</h1>
 
     <h2>Welcome <%= user.getName() %></h2>
 
