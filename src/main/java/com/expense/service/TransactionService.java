@@ -300,6 +300,119 @@ public class TransactionService {
         return new MonthlyTrendChartData(labels, incomeList, expenseList, hasNonZero);
     }
 
+    // Category breakdown item DTO
+    public static class CategoryBreakdownItem {
+        private final String category;
+        private final double totalExpense;
+        private final int transactionCount;
+        private final double percentage; // e.g. 35.5
+
+        public CategoryBreakdownItem(String category, double totalExpense, int transactionCount, double percentage) {
+            this.category = category;
+            this.totalExpense = Math.round(totalExpense * 100.0) / 100.0;
+            this.transactionCount = transactionCount;
+            this.percentage = Math.round(percentage * 10.0) / 10.0;
+        }
+
+        public String getCategory() {
+            return category;
+        }
+
+        public double getTotalExpense() {
+            return totalExpense;
+        }
+
+        public int getTransactionCount() {
+            return transactionCount;
+        }
+
+        public double getPercentage() {
+            return percentage;
+        }
+    }
+
+    // Category breakdown chart & list container
+    public static class CategoryBreakdownData {
+        private final List<CategoryBreakdownItem> items;
+        private final List<String> labels;
+        private final List<Double> data;
+        private final double totalExpenses;
+        private final boolean hasData;
+
+        public CategoryBreakdownData(List<CategoryBreakdownItem> items, List<String> labels,
+                                    List<Double> data, double totalExpenses, boolean hasData) {
+            this.items = items;
+            this.labels = labels;
+            this.data = data;
+            this.totalExpenses = Math.round(totalExpenses * 100.0) / 100.0;
+            this.hasData = hasData;
+        }
+
+        public List<CategoryBreakdownItem> getItems() {
+            return items;
+        }
+
+        public List<String> getLabels() {
+            return labels;
+        }
+
+        public List<Double> getData() {
+            return data;
+        }
+
+        public double getTotalExpenses() {
+            return totalExpenses;
+        }
+
+        public boolean isHasData() {
+            return hasData;
+        }
+    }
+
+    // Retrieve category-wise expense breakdown for the resolved date range
+    public CategoryBreakdownData getCategoryBreakdownData(int userId, DateRangeResolution range) {
+        if (range == null || range.hasError() || range.getStartDate() == null || range.getEndDate() == null) {
+            return new CategoryBreakdownData(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 0.0, false);
+        }
+
+        List<TransactionDAO.CategoryExpenseRecord> records = transactionDAO.getCategoryExpensesByDateRange(
+                userId, range.getStartDateString(), range.getEndDateString());
+
+        if (records == null || records.isEmpty()) {
+            return new CategoryBreakdownData(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), 0.0, false);
+        }
+
+        double grandTotal = 0.0;
+        for (TransactionDAO.CategoryExpenseRecord r : records) {
+            if (r.getTotalExpense() > 0) {
+                grandTotal += r.getTotalExpense();
+            }
+        }
+
+        List<CategoryBreakdownItem> items = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        List<Double> data = new ArrayList<>();
+
+        for (TransactionDAO.CategoryExpenseRecord r : records) {
+            if (r.getTotalExpense() <= 0) {
+                continue;
+            }
+            double roundedAmount = Math.round(r.getTotalExpense() * 100.0) / 100.0;
+            double pct = (grandTotal > 0) ? (roundedAmount / grandTotal) * 100.0 : 0.0;
+            double roundedPct = Math.round(pct * 10.0) / 10.0;
+
+            String catName = (r.getCategory() == null || r.getCategory().trim().isEmpty())
+                    ? "Uncategorized" : r.getCategory().trim();
+
+            items.add(new CategoryBreakdownItem(catName, roundedAmount, r.getCount(), roundedPct));
+            labels.add(catName);
+            data.add(roundedAmount);
+        }
+
+        boolean hasData = !items.isEmpty() && grandTotal > 0;
+        return new CategoryBreakdownData(items, labels, data, grandTotal, hasData);
+    }
+
     // Filtered Financial Summary for Dashboard
     public DashboardSummary getFilteredDashboardSummary(int userId, String rangeParam, String customStart, String customEnd) {
         DateRangeResolution range = resolveDateRange(userId, rangeParam, customStart, customEnd);

@@ -5,11 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -18,7 +20,9 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import com.expense.dao.TransactionDAO;
 import com.expense.dao.UserDAO;
+import com.expense.model.Transaction;
 import com.expense.model.User;
+import com.expense.util.DBConnection;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class AnalyticsDateFilterTest {
@@ -28,6 +32,7 @@ public class AnalyticsDateFilterTest {
     private static UserDAO userDAO;
     private static int userAId;
     private static int userEmptyId;
+    private static File testDbFile;
 
     // Fixed clock: 2024-02-29 (Leap Year test date)
     private static final Clock leapYearClock = Clock.fixed(
@@ -35,6 +40,14 @@ public class AnalyticsDateFilterTest {
 
     @BeforeAll
     public static void setUp() {
+        // Guarantee isolation: point thread-local DB path to dedicated test database in target/test-data
+        File testDir = new File("target/test-data");
+        if (!testDir.exists()) {
+            testDir.mkdirs();
+        }
+        testDbFile = new File(testDir, "analytics-test-" + System.currentTimeMillis() + ".db");
+        DBConnection.setThreadDatabasePath(testDbFile.getAbsolutePath());
+
         transactionDAO = new TransactionDAO();
         userDAO = new UserDAO();
         transactionService = new TransactionService(transactionDAO, leapYearClock);
@@ -199,6 +212,202 @@ public class AnalyticsDateFilterTest {
         assertEquals(0.00, sEmptyIsolated.getTotalIncome(), 0.001);
         assertEquals(0.00, sEmptyIsolated.getTotalExpense(), 0.001);
         assertEquals(0, sEmptyIsolated.getTransactionCount());
+    }
+
+    @Test
+    @Order(8)
+    public void testMonthlyTrendChartAggregationAndZeroGapFilling() {
+        // Test 6M range for User A: 2023-08-29 to 2024-02-29
+        // Intersecting calendar months: Aug 2023, Sep 2023, Oct 2023, Nov 2023, Dec 2023, Jan 2024, Feb 2024 (7 months)
+        TransactionService.DateRangeResolution r6m = transactionService.resolveDateRange(userAId, "6M", null, null);
+        TransactionService.MonthlyTrendChartData chartData = transactionService.getMonthlyTrendChartData(userAId, r6m);
+
+        assertTrue(chartData.isHasData());
+        assertEquals(7, chartData.getLabels().size());
+        assertEquals("Aug 2023", chartData.getLabels().get(0));
+        assertEquals("Nov 2023", chartData.getLabels().get(3));
+        assertEquals("Feb 2024", chartData.getLabels().get(6));
+
+        // Check values:
+        // Aug 2023: no records -> 0, 0
+        assertEquals(0.0, chartData.getIncome().get(0), 0.001);
+        assertEquals(0.0, chartData.getExpense().get(0), 0.001);
+
+        // Sep 2023: no records -> 0, 0 (zero gap-fill)
+        assertEquals(0.0, chartData.getIncome().get(1), 0.001);
+        assertEquals(0.0, chartData.getExpense().get(1), 0.001);
+
+        // Oct 2023: no records -> 0, 0 (zero gap-fill)
+        assertEquals(0.0, chartData.getIncome().get(2), 0.001);
+        assertEquals(0.0, chartData.getExpense().get(2), 0.001);
+
+        // Nov 2023: Expense 5000.00
+        assertEquals(0.0, chartData.getIncome().get(3), 0.001);
+        assertEquals(5000.00, chartData.getExpense().get(3), 0.001);
+
+        // Dec 2023: no records -> 0, 0 (zero gap-fill)
+        assertEquals(0.0, chartData.getIncome().get(4), 0.001);
+        assertEquals(0.0, chartData.getExpense().get(4), 0.001);
+
+        // Jan 2024: no records -> 0, 0 (zero gap-fill)
+        assertEquals(0.0, chartData.getIncome().get(5), 0.001);
+        assertEquals(0.0, chartData.getExpense().get(5), 0.001);
+
+        // Feb 2024: Income 10000.00, Expense 2500.00
+        assertEquals(10000.00, chartData.getIncome().get(6), 0.001);
+        assertEquals(2500.00, chartData.getExpense().get(6), 0.001);
+    }
+
+    @Test
+    @Order(9)
+    public void testMonthlyTrendCustomMultiMonth() {
+        // Custom 3-month span: 2023-10-15 to 2023-12-15
+        TransactionService.DateRangeResolution customRange = transactionService.resolveDateRange(
+                userAId, "CUSTOM", "2023-10-15", "2023-12-15");
+        TransactionService.MonthlyTrendChartData chartData = transactionService.getMonthlyTrendChartData(userAId, customRange);
+
+        assertTrue(chartData.isHasData());
+        assertEquals(3, chartData.getLabels().size());
+        assertEquals("Oct 2023", chartData.getLabels().get(0));
+        assertEquals("Nov 2023", chartData.getLabels().get(1));
+        assertEquals("Dec 2023", chartData.getLabels().get(2));
+
+        // Oct: 0, Nov: 5000, Dec: 0
+        assertEquals(0.0, chartData.getExpense().get(0), 0.001);
+        assertEquals(5000.0, chartData.getExpense().get(1), 0.001);
+        assertEquals(0.0, chartData.getExpense().get(2), 0.001);
+    }
+
+    @Test
+    @Order(10)
+    public void testMonthlyTrendForEmptyUserAndIsolation() {
+        // Empty user querying 1Y
+        TransactionService.DateRangeResolution r1y = transactionService.resolveDateRange(userEmptyId, "1Y", null, null);
+        TransactionService.MonthlyTrendChartData emptyChart = transactionService.getMonthlyTrendChartData(userEmptyId, r1y);
+
+        assertFalse(emptyChart.isHasData(), "Empty user should have hasData = false");
+        for (double inc : emptyChart.getIncome()) {
+            assertEquals(0.0, inc, 0.001);
+        }
+        for (double exp : emptyChart.getExpense()) {
+            assertEquals(0.0, exp, 0.001);
+        }
+
+        // Empty user querying ALL
+        TransactionService.DateRangeResolution rAll = transactionService.resolveDateRange(userEmptyId, "ALL", null, null);
+        TransactionService.MonthlyTrendChartData emptyAllChart = transactionService.getMonthlyTrendChartData(userEmptyId, rAll);
+        assertFalse(emptyAllChart.isHasData());
+        assertEquals(1, emptyAllChart.getLabels().size());
+        assertEquals(0.0, emptyAllChart.getIncome().get(0), 0.001);
+        assertEquals(0.0, emptyAllChart.getExpense().get(0), 0.001);
+    }
+
+    @Test
+    @Order(11)
+    public void testCategoryExpenseBreakdownAggregationAndOrdering() {
+        // Range 6M for User A (2023-08-29 to 2024-02-29):
+        // Has User A expenses:
+        // - 2023-11-15: Rent 5000.00
+        // - 2024-02-20: Groceries 2500.00
+        // (Income Salary 10000.00 on 2024-02-15 must be EXCLUDED)
+        TransactionService.DateRangeResolution r6m = transactionService.resolveDateRange(userAId, "6M", null, null);
+        TransactionService.CategoryBreakdownData breakdown = transactionService.getCategoryBreakdownData(userAId, r6m);
+
+        assertTrue(breakdown.isHasData());
+        assertEquals(7500.00, breakdown.getTotalExpenses(), 0.001);
+        assertEquals(2, breakdown.getItems().size());
+
+        // Order descending by amount: Rent (5000.00) first, Groceries (2500.00) second
+        TransactionService.CategoryBreakdownItem item1 = breakdown.getItems().get(0);
+        assertEquals("Rent", item1.getCategory());
+        assertEquals(5000.00, item1.getTotalExpense(), 0.001);
+        assertEquals(1, item1.getTransactionCount());
+        // Percentage: 5000 / 7500 = 66.666...% -> 66.7%
+        assertEquals(66.7, item1.getPercentage(), 0.1);
+
+        TransactionService.CategoryBreakdownItem item2 = breakdown.getItems().get(1);
+        assertEquals("Groceries", item2.getCategory());
+        assertEquals(2500.00, item2.getTotalExpense(), 0.001);
+        assertEquals(1, item2.getTransactionCount());
+        // Percentage: 2500 / 7500 = 33.333...% -> 33.3%
+        assertEquals(33.3, item2.getPercentage(), 0.1);
+
+        assertEquals("Rent", breakdown.getLabels().get(0));
+        assertEquals("Groceries", breakdown.getLabels().get(1));
+    }
+
+    @Test
+    @Order(12)
+    public void testCategoryExpenseNullAndWhitespaceNormalization() {
+        // Create transactions with NULL, empty, and whitespace categories via DAO directly
+        // to verify database query and service layer normalization to "Uncategorized"
+        Transaction txNull = new Transaction();
+        txNull.setUserId(userAId);
+        txNull.setType("Expense");
+        txNull.setCategory(null);
+        txNull.setAmount(1200.00);
+        txNull.setDescription("Null category expense");
+        txNull.setTransactionDate(java.sql.Date.valueOf("2023-12-05"));
+        transactionDAO.addTransaction(txNull);
+
+        Transaction txSpaces = new Transaction();
+        txSpaces.setUserId(userAId);
+        txSpaces.setType("Expense");
+        txSpaces.setCategory("   ");
+        txSpaces.setAmount(800.00);
+        txSpaces.setDescription("Spaces category expense");
+        txSpaces.setTransactionDate(java.sql.Date.valueOf("2023-12-10"));
+        transactionDAO.addTransaction(txSpaces);
+
+        // Query custom date window covering December 2023
+        TransactionService.DateRangeResolution customDec = transactionService.resolveDateRange(
+                userAId, "CUSTOM", "2023-12-01", "2023-12-31");
+        TransactionService.CategoryBreakdownData decBreakdown = transactionService.getCategoryBreakdownData(
+                userAId, customDec);
+
+        assertTrue(decBreakdown.isHasData());
+        assertEquals(2000.00, decBreakdown.getTotalExpenses(), 0.001);
+        assertEquals(1, decBreakdown.getItems().size());
+
+        TransactionService.CategoryBreakdownItem uncatItem = decBreakdown.getItems().get(0);
+        assertEquals("Uncategorized", uncatItem.getCategory());
+        assertEquals(2000.00, uncatItem.getTotalExpense(), 0.001);
+        assertEquals(2, uncatItem.getTransactionCount());
+        assertEquals(100.0, uncatItem.getPercentage(), 0.01);
+    }
+
+    @Test
+    @Order(13)
+    public void testCategoryExpenseZeroExpensesAndUserIsolation() {
+        // Empty user querying 1Y should have no category expense data
+        TransactionService.DateRangeResolution empty1y = transactionService.resolveDateRange(
+                userEmptyId, "1Y", null, null);
+        TransactionService.CategoryBreakdownData emptyBreakdown = transactionService.getCategoryBreakdownData(
+                userEmptyId, empty1y);
+
+        assertFalse(emptyBreakdown.isHasData());
+        assertEquals(0.00, emptyBreakdown.getTotalExpenses(), 0.001);
+        assertTrue(emptyBreakdown.getItems().isEmpty());
+        assertTrue(emptyBreakdown.getLabels().isEmpty());
+        assertTrue(emptyBreakdown.getData().isEmpty());
+
+        // User A querying a date range with only income (e.g. 2023-05-01 to 2023-05-31 where only Bonus occurred)
+        TransactionService.DateRangeResolution incomeOnlyRange = transactionService.resolveDateRange(
+                userAId, "CUSTOM", "2023-05-01", "2023-05-31");
+        TransactionService.CategoryBreakdownData incomeOnlyBreakdown = transactionService.getCategoryBreakdownData(
+                userAId, incomeOnlyRange);
+
+        assertFalse(incomeOnlyBreakdown.isHasData());
+        assertEquals(0.00, incomeOnlyBreakdown.getTotalExpenses(), 0.001);
+        assertTrue(incomeOnlyBreakdown.getItems().isEmpty());
+    }
+
+    @AfterAll
+    public static void tearDown() {
+        DBConnection.clearThreadDatabasePath();
+        if (testDbFile != null && testDbFile.exists()) {
+            testDbFile.delete();
+        }
     }
 }
 

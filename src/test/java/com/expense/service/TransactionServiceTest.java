@@ -6,11 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -29,9 +31,18 @@ public class TransactionServiceTest {
     private static UserDAO userDAO;
     private static int testUserId;
     private static int otherUserId;
+    private static File testDbFile;
 
     @BeforeAll
     public static void setup() {
+        // Guarantee isolation: point thread-local DB path to dedicated test database in target/test-data
+        File testDir = new File("target/test-data");
+        if (!testDir.exists()) {
+            testDir.mkdirs();
+        }
+        testDbFile = new File(testDir, "transaction-service-test-" + System.currentTimeMillis() + ".db");
+        DBConnection.setThreadDatabasePath(testDbFile.getAbsolutePath());
+
         transactionService = new TransactionService();
         userDAO = new UserDAO();
 
@@ -114,6 +125,14 @@ public class TransactionServiceTest {
         // Legitimate owner deletes
         boolean legitDelete = transactionService.deleteTransaction(targetTxId, testUserId);
         assertTrue(legitDelete, "Owner must be able to delete their transaction");
+    }
+
+    @AfterAll
+    public static void tearDown() {
+        DBConnection.clearThreadDatabasePath();
+        if (testDbFile != null && testDbFile.exists()) {
+            testDbFile.delete();
+        }
     }
 }
 

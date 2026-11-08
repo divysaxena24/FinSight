@@ -446,6 +446,70 @@ public class TransactionDAO {
         return results;
     }
 
+    // Record holding aggregated category expense values
+    public static class CategoryExpenseRecord {
+        private final String category;
+        private final double totalExpense;
+        private final int count;
+
+        public CategoryExpenseRecord(String category, double totalExpense, int count) {
+            this.category = category;
+            this.totalExpense = totalExpense;
+            this.count = count;
+        }
+
+        public String getCategory() {
+            return category;
+        }
+
+        public double getTotalExpense() {
+            return totalExpense;
+        }
+
+        public int getCount() {
+            return count;
+        }
+    }
+
+    // Category-wise expense aggregation query (inclusive dates, sorted descending)
+    public List<CategoryExpenseRecord> getCategoryExpensesByDateRange(int userId, String startDate, String endDate) {
+        List<CategoryExpenseRecord> list = new ArrayList<>();
+        String sql = "SELECT "
+                   + "CASE WHEN category IS NULL OR TRIM(category) = '' THEN 'Uncategorized' ELSE TRIM(category) END AS cat, "
+                   + "COALESCE(SUM(amount), 0.0) AS total_expense, "
+                   + "COUNT(id) AS tx_count "
+                   + "FROM transactions "
+                   + "WHERE user_id = ? AND type = 'Expense' AND transaction_date >= ? AND transaction_date <= ? "
+                   + "GROUP BY cat "
+                   + "ORDER BY total_expense DESC";
+
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+
+            if (con == null || ps == null) {
+                return list;
+            }
+
+            ps.setInt(1, userId);
+            ps.setString(2, startDate);
+            ps.setString(3, endDate);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String cat = rs.getString("cat");
+                    double total = rs.getDouble("total_expense");
+                    int count = rs.getInt("tx_count");
+                    list.add(new CategoryExpenseRecord(cat != null ? cat : "Uncategorized", total, count));
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return list;
+    }
+
     // Find the earliest transaction date for a user
     public String getEarliestTransactionDate(int userId) {
         String sql = "SELECT MIN(transaction_date) FROM transactions WHERE user_id = ?";
@@ -470,5 +534,62 @@ public class TransactionDAO {
         }
 
         return null;
+    }
+
+    /**
+     * Executes atomic batch import of staged transactions in a single JDBC transaction.
+     * Rollback is performed on any SQL failure.
+     */
+    public boolean batchImportTransactions(int userId, List<Transaction> transactions) {
+        if (transactions == null || transactions.isEmpty()) {
+            return false;
+        }
+
+        String sql = "INSERT INTO transactions(user_id, type, category, amount, description, transaction_date) "
+                   + "VALUES(?, ?, ?, ?, ?, ?)";
+
+        Connection con = null;
+        try {
+            con = DBConnection.getConnection();
+            if (con == null) return false;
+
+            con.setAutoCommit(false);
+
+            try (PreparedStatement ps = con.prepareStatement(sql)) {
+                for (Transaction t : transactions) {
+                    if (t == null) continue;
+                    ps.setInt(1, userId);
+                    ps.setString(2, t.getType() != null ? t.getType() : "Expense");
+                    ps.setString(3, t.getCategory() != null ? t.getCategory() : "Other");
+                    ps.setDouble(4, t.getAmount());
+                    ps.setString(5, t.getDescription() != null ? t.getDescription() : "");
+                    ps.setString(6, t.getTransactionDate() != null ? t.getTransactionDate().toString() : new Date(System.currentTimeMillis()).toString());
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+            }
+
+            con.commit();
+            return true;
+        } catch (Exception e) {
+            if (con != null) {
+                try {
+                    con.rollback();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+            e.printStackTrace();
+            return false;
+        } finally {
+            if (con != null) {
+                try {
+                    con.setAutoCommit(true);
+                    con.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 }
