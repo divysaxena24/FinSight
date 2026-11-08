@@ -39,9 +39,27 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="phone">Phone Number (Optional)</label>
+                        <input type="tel" id="phone" name="phone" class="form-control" 
+                               value="<c:out value="${enteredPhone}"/>" placeholder="+91 9876543210">
+                    </div>
+
+                    <div class="form-group">
                         <label for="password">Password</label>
                         <input type="password" id="password" name="password" class="form-control" 
                                required minlength="6" placeholder="At least 6 characters">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm Password</label>
+                        <input type="password" id="confirmPassword" name="confirmPassword" class="form-control" 
+                               required minlength="6" placeholder="Repeat your password">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="transactionPin">Transaction PIN (4–6 digits, for transfers & withdrawals)</label>
+                        <input type="password" id="transactionPin" name="transactionPin" class="form-control" 
+                               maxlength="6" pattern="\d{4,6}" placeholder="e.g. 1234 (digits only)">
                     </div>
 
                     <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">

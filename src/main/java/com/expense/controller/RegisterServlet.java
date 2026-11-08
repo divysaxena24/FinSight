@@ -37,15 +37,28 @@ public class RegisterServlet extends HttpServlet {
 
         String name = request.getParameter("name");
         String email = request.getParameter("email");
+        String phone = request.getParameter("phone");
         String password = request.getParameter("password");
+        String confirmPassword = request.getParameter("confirmPassword");
+        String pin = request.getParameter("transactionPin");
 
         if (name == null || name.trim().isEmpty() ||
             email == null || email.trim().isEmpty() ||
             password == null || password.trim().isEmpty()) {
 
-            request.setAttribute("errorMessage", "All fields are required.");
+            request.setAttribute("errorMessage", "All required fields must be filled.");
             request.setAttribute("enteredName", name);
             request.setAttribute("enteredEmail", email);
+            request.setAttribute("enteredPhone", phone);
+            request.getRequestDispatcher("/WEB-INF/views/register.jsp").forward(request, response);
+            return;
+        }
+
+        if (confirmPassword != null && !password.equals(confirmPassword)) {
+            request.setAttribute("errorMessage", "Password and Confirm Password do not match.");
+            request.setAttribute("enteredName", name);
+            request.setAttribute("enteredEmail", email);
+            request.setAttribute("enteredPhone", phone);
             request.getRequestDispatcher("/WEB-INF/views/register.jsp").forward(request, response);
             return;
         }
@@ -54,6 +67,16 @@ public class RegisterServlet extends HttpServlet {
             request.setAttribute("errorMessage", "Password must be at least 6 characters long.");
             request.setAttribute("enteredName", name);
             request.setAttribute("enteredEmail", email);
+            request.setAttribute("enteredPhone", phone);
+            request.getRequestDispatcher("/WEB-INF/views/register.jsp").forward(request, response);
+            return;
+        }
+
+        if (pin != null && !pin.trim().isEmpty() && !pin.trim().matches("^\\d{4,6}$")) {
+            request.setAttribute("errorMessage", "Transaction PIN must be 4 to 6 numeric digits.");
+            request.setAttribute("enteredName", name);
+            request.setAttribute("enteredEmail", email);
+            request.setAttribute("enteredPhone", phone);
             request.getRequestDispatcher("/WEB-INF/views/register.jsp").forward(request, response);
             return;
         }
@@ -61,7 +84,11 @@ public class RegisterServlet extends HttpServlet {
         User user = new User();
         user.setName(name.trim());
         user.setEmail(email.trim());
+        user.setPhone(phone != null ? phone.trim() : null);
         user.setPassword(password);
+        if (pin != null && !pin.trim().isEmpty()) {
+            user.setTransactionPin(pin.trim());
+        }
 
         boolean registered = userDAO.registerUser(user);
 
