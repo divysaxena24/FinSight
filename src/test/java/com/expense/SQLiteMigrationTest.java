@@ -33,13 +33,22 @@ public class SQLiteMigrationTest {
 
     private static UserDAO userDAO;
     private static TransactionDAO transactionDAO;
+    private static File testDbFile;
 
     @BeforeAll
     public static void setUp() {
+        // Guarantee isolation: point thread-local DB path to a dedicated test database in target/test-data
+        File testDir = new File("target/test-data");
+        if (!testDir.exists()) {
+            testDir.mkdirs();
+        }
+        testDbFile = new File(testDir, "sqlite-migration-test-" + System.currentTimeMillis() + ".db");
+        DBConnection.setThreadDatabasePath(testDbFile.getAbsolutePath());
+
         userDAO = new UserDAO();
         transactionDAO = new TransactionDAO();
 
-        // Ensure clean test state
+        // Initialize schema and ensure clean test state on the dedicated test database
         try (Connection con = DBConnection.getConnection();
              Statement stmt = con != null ? con.createStatement() : null) {
             if (stmt != null) {
@@ -48,6 +57,15 @@ public class SQLiteMigrationTest {
             }
         } catch (SQLException e) {
             e.printStackTrace();
+        }
+    }
+
+    @AfterAll
+    public static void tearDown() {
+        // Clear thread-local DB path
+        DBConnection.clearThreadDatabasePath();
+        if (testDbFile != null && testDbFile.exists()) {
+            testDbFile.delete();
         }
     }
 
