@@ -47,6 +47,8 @@ public class LoginServlet extends HttpServlet {
         User user = userDAO.loginUser(email.trim(), password);
 
         if (user != null) {
+            // Rotate session ID to protect against session fixation
+            request.changeSessionId();
             HttpSession session = request.getSession(true);
             session.setAttribute("user", user);
             session.setAttribute("successMessage", "Welcome back, " + user.getName() + "!");
