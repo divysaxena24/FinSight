@@ -9,14 +9,18 @@
     <title>FinSight | Deposit Funds</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css">
 </head>
-<body>
+<body class="deposit-page">
     <nav class="navbar">
         <a href="${pageContext.request.contextPath}/dashboard" class="brand">💰 FinSight</a>
-        <div class="nav-links">
+        <button type="button" class="deposit-mobile-toggle" aria-controls="deposit-nav-links" aria-expanded="false">
+            <span class="sr-only">Toggle navigation</span>
+            <span aria-hidden="true">☰</span>
+        </button>
+        <div class="nav-links" id="deposit-nav-links">
             <a href="${pageContext.request.contextPath}/dashboard">Dashboard</a>
             <a href="${pageContext.request.contextPath}/accounts">My Accounts</a>
             <a href="${pageContext.request.contextPath}/banking?action=transfer">Transfer</a>
-            <a href="${pageContext.request.contextPath}/banking?action=deposit" style="color: var(--primary); font-weight: 700;">Deposit</a>
+            <a href="${pageContext.request.contextPath}/banking?action=deposit" class="active" aria-current="page">Deposit</a>
             <a href="${pageContext.request.contextPath}/banking?action=withdraw">Withdraw</a>
             <a href="${pageContext.request.contextPath}/viewTransaction">Transactions</a>
             <a href="${pageContext.request.contextPath}/budgets">Budgets</a>
@@ -28,27 +32,27 @@
         </div>
     </nav>
 
-    <div class="container" style="max-width: 600px; margin-top: 35px;">
+    <div class="container deposit-container">
         <div class="page-header text-center">
             <h1 class="page-title">💵 Deposit Simulated Funds</h1>
             <p class="page-subtitle">Add simulated funds to your FinSight banking accounts</p>
         </div>
 
         <c:if test="${not empty errorMessage}">
-            <div class="alert alert-danger" style="margin-bottom: 20px;">
+            <div class="alert alert-danger" role="alert">
                 <span><c:out value="${errorMessage}"/></span>
             </div>
         </c:if>
 
-        <div class="card" style="padding: 30px;">
+        <div class="card deposit-card">
             <form action="${pageContext.request.contextPath}/banking" method="post">
                 <input type="hidden" name="csrfToken" value="${csrfToken}">
                 <input type="hidden" name="action" value="deposit">
                 <input type="hidden" name="idempotencyKey" value="<%= java.util.UUID.randomUUID().toString() %>">
 
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label>Select Target Account</label>
-                    <select name="accountId" class="form-control" required>
+                <div class="form-group">
+                    <label for="depositAccount">Select Target Account</label>
+                    <select id="depositAccount" name="accountId" class="form-control" required>
                         <c:forEach var="acc" items="${accounts}">
                             <option value="${acc.id}" ${param.accountId == acc.id ? 'selected' : ''}>
                                 <c:out value="${acc.accountNumber}"/> (<c:out value="${acc.accountType}"/>) — Balance: ₹<fmt:formatNumber value="${acc.balance}" minFractionDigits="2"/>
@@ -57,14 +61,14 @@
                     </select>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label>Deposit Amount (₹)</label>
-                    <input type="number" step="0.01" min="1" max="10000000" name="amount" class="form-control" placeholder="e.g. 50000.00" required autofocus>
+                <div class="form-group">
+                    <label for="depositAmount">Deposit Amount (₹)</label>
+                    <input type="number" id="depositAmount" step="0.01" min="1" max="10000000" name="amount" class="form-control" placeholder="e.g. 50000.00" required autofocus>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label>Source / Category</label>
-                    <select name="category" class="form-control">
+                <div class="form-group">
+                    <label for="depositCategory">Source / Category</label>
+                    <select id="depositCategory" name="category" class="form-control">
                         <option value="Salary">Salary</option>
                         <option value="Freelance">Freelance</option>
                         <option value="Investment">Investment Return</option>
@@ -72,17 +76,29 @@
                     </select>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 25px;">
-                    <label>Description / Note</label>
-                    <input type="text" name="description" class="form-control" placeholder="e.g. Monthly salary deposit" required>
+                <div class="form-group">
+                    <label for="depositDescription">Description / Note</label>
+                    <input type="text" id="depositDescription" name="description" class="form-control" placeholder="e.g. Monthly salary deposit" required>
                 </div>
 
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 1rem;">
+                <button type="submit" class="btn btn-primary deposit-submit-button">
                     Confirm Simulated Deposit
                 </button>
             </form>
         </div>
     </div>
+    <script>
+        (function() {
+            var navToggle = document.querySelector('.deposit-mobile-toggle');
+            var navLinks = document.getElementById('deposit-nav-links');
+            if (navToggle && navLinks) {
+                navToggle.addEventListener('click', function() {
+                    var isOpen = navLinks.classList.toggle('deposit-nav-open');
+                    navToggle.setAttribute('aria-expanded', String(isOpen));
+                });
+            }
+        })();
+    </script>
 </body>
 </html>
 

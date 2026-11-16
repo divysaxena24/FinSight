@@ -8,29 +8,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FinSight | Review Transactions</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css">
-    <style>
-        .table-responsive { overflow-x: auto; margin-top: 15px; }
-        .badge-income { background: #dcfce7; color: #15803d; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
-        .badge-expense { background: #fee2e2; color: #b91c1c; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
-        .badge-refund { background: #e0e7ff; color: #4338ca; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
-        .badge-duplicate { background: #fef3c7; color: #b45309; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
-        .editable-cell { border: 1px solid transparent; padding: 4px; border-radius: 4px; }
-        .editable-cell:focus { border-color: var(--primary); outline: none; background: #fff; }
-    </style>
 </head>
-<body>
+<body class="statement-review-page">
     <nav class="navbar">
         <a href="${pageContext.request.contextPath}/dashboard" class="brand">💰 FinSight</a>
-        <div class="nav-links">
+        <button type="button" class="statement-review-mobile-toggle" aria-controls="statement-review-nav-links" aria-expanded="false">
+            <span class="sr-only">Toggle navigation</span>
+            <span aria-hidden="true">☰</span>
+        </button>
+        <div class="nav-links" id="statement-review-nav-links">
             <a href="${pageContext.request.contextPath}/dashboard">Dashboard</a>
             <a href="${pageContext.request.contextPath}/viewTransaction">Transactions</a>
-            <a href="${pageContext.request.contextPath}/statement-analysis">Statement Analysis</a>
+            <a href="${pageContext.request.contextPath}/statement-analysis" class="active" aria-current="page">Statement Analysis</a>
             <a href="${pageContext.request.contextPath}/logout" class="btn-logout">Logout</a>
         </div>
     </nav>
 
-    <div class="container" style="max-width: 1200px; margin-top: 25px;">
-        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="container statement-review-container">
+        <div class="page-header statement-review-header">
             <div>
                 <h1 class="page-title">🔍 Statement Review & Edit</h1>
                 <p class="page-subtitle">
@@ -43,10 +38,10 @@
                 </p>
             </div>
             <div>
-                <form action="${pageContext.request.contextPath}/statement-analysis?action=import" method="post" style="display: inline;">
+                <form action="${pageContext.request.contextPath}/statement-analysis?action=import" method="post" class="statement-import-form">
                     <input type="hidden" name="csrfToken" value="${csrfToken}">
                     <input type="hidden" name="stagingId" value="${staging.stagingId}">
-                    <button type="submit" class="btn btn-success" id="importBtn" style="font-weight: 700; padding: 10px 20px;">
+                    <button type="submit" class="btn btn-success statement-import-button" id="importBtn">
                         ✅ Approve & Import Selected (<span id="selectedCountDisplay">${staging.selectedCount}</span>)
                     </button>
                 </form>
@@ -60,18 +55,18 @@
         </c:if>
 
         <!-- Import Guidance Notice -->
-        <div class="card" style="margin-top: 15px; padding: 12px 18px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;">
-            <div style="font-size: 0.9rem; color: #166534;">
+        <div class="card statement-policy-card">
+            <div>
                 <strong>ℹ️ Import Policy:</strong> Only checked rows will be imported into your ledger. 
-                <span style="color: #991b1b; font-weight: 600;">Confirmed duplicates</span> and 
-                <span style="color: #4338ca; font-weight: 600;">Account Transfers</span> are automatically excluded from Income/Expense metrics upon import.
+                <span class="statement-duplicate-text">Confirmed duplicates</span> and
+                <span class="statement-transfer-text">Account Transfers</span> are automatically excluded from Income/Expense metrics upon import.
             </div>
         </div>
 
         <c:if test="${not empty result.unparsedLines}">
-            <div class="alert alert-warning" style="margin-top: 15px;">
+            <div class="alert alert-warning statement-unparsed-alert">
                 <strong>⚠️ Partial Parsing Notice:</strong> ${result.unparsedLineCount} line(s) could not be parsed:
-                <ul style="margin-top: 5px; margin-left: 20px;">
+                <ul>
                     <c:forEach var="unparsed" items="${result.unparsedLines}">
                         <li><code><c:out value="${unparsed}"/></code></li>
                     </c:forEach>
@@ -80,10 +75,10 @@
         </c:if>
 
         <!-- Search & Filter Controls -->
-        <div class="card" style="margin-top: 15px; padding: 15px;">
-            <div style="display: flex; gap: 15px; align-items: center;">
-                <input type="text" id="searchInput" placeholder="Search narration or merchant..." class="form-control" style="flex: 2;">
-                <select id="categoryFilter" class="form-control" style="flex: 1;">
+        <div class="card statement-filter-card">
+            <div class="statement-filter-controls">
+                <input type="text" id="searchInput" placeholder="Search narration or merchant..." class="form-control statement-search-input">
+                <select id="categoryFilter" class="form-control statement-category-filter">
                     <option value="">All Categories</option>
                     <option value="Food & Dining">Food & Dining</option>
                     <option value="Shopping">Shopping</option>
@@ -100,12 +95,12 @@
         </div>
 
         <!-- Transactions Table -->
-        <div class="card" style="margin-top: 20px; padding: 15px;">
-            <div class="table-responsive">
-                <table class="table" style="width: 100%; border-collapse: collapse;">
+        <div class="card statement-review-table-card">
+            <div class="table-responsive statement-review-table-wrapper">
+                <table class="table statement-review-table">
                     <thead>
-                        <tr style="border-bottom: 2px solid #e2e8f0; text-align: left;">
-                            <th style="width: 40px;"><input type="checkbox" id="masterCheckbox" onchange="toggleMaster(this)"></th>
+                        <tr>
+                            <th class="statement-select-column"><input type="checkbox" id="masterCheckbox" onchange="toggleMaster(this)"></th>
                             <th>Date</th>
                             <th>Description</th>
                             <th>Merchant</th>
@@ -117,7 +112,7 @@
                     </thead>
                     <tbody id="txTableBody">
                         <c:forEach var="item" items="${staging.itemsList}">
-                            <tr style="border-bottom: 1px solid #f1f5f9;" data-tx-id="${item.stagingTxId}" class="tx-row">
+                            <tr data-tx-id="${item.stagingTxId}" class="tx-row">
                                 <td>
                                     <input type="checkbox" class="tx-select" ${item.selected ? 'checked' : ''} 
                                            onchange="updateTx('${item.stagingTxId}', {selected: this.checked})">
@@ -127,7 +122,7 @@
                                            onchange="updateTx('${item.stagingTxId}', {date: this.value})">
                                 </td>
                                 <td>
-                                    <input type="text" value="<c:out value="${item.transaction.description}"/>" class="editable-cell" style="width: 100%;"
+                                    <input type="text" value="<c:out value="${item.transaction.description}"/>" class="editable-cell statement-description-input"
                                            onchange="updateTx('${item.stagingTxId}', {description: this.value})">
                                 </td>
                                 <td>
@@ -162,7 +157,7 @@
                                     </c:choose>
                                 </td>
                                 <td>
-                                    <input type="number" step="0.01" value="${item.transaction.amount}" class="editable-cell" style="width: 90px; text-align: right;"
+                                    <input type="number" step="0.01" value="${item.transaction.amount}" class="editable-cell statement-amount-input"
                                            onchange="updateTx('${item.stagingTxId}', {amount: this.value})">
                                 </td>
                                 <td>
@@ -170,10 +165,10 @@
                                         <span class="badge-duplicate">Suspected Duplicate</span>
                                     </c:if>
                                     <c:if test="${item.transaction.confirmedDuplicate}">
-                                        <span class="badge-duplicate" style="background: #fecaca; color: #991b1b;">Confirmed Duplicate</span>
+                                        <span class="badge-duplicate statement-confirmed-duplicate">Confirmed Duplicate</span>
                                     </c:if>
                                     <c:if test="${item.transaction.manuallyCategorized}">
-                                        <span style="font-size: 0.75rem; color: #64748b;">(Edited)</span>
+                                        <span class="statement-edited-label">(Edited)</span>
                                     </c:if>
                                 </td>
                             </tr>
@@ -185,6 +180,17 @@
     </div>
 
     <script>
+        (function() {
+            var navToggle = document.querySelector('.statement-review-mobile-toggle');
+            var navLinks = document.getElementById('statement-review-nav-links');
+            if (navToggle && navLinks) {
+                navToggle.addEventListener('click', function() {
+                    var isOpen = navLinks.classList.toggle('statement-review-nav-open');
+                    navToggle.setAttribute('aria-expanded', String(isOpen));
+                });
+            }
+        })();
+
         const stagingId = "${staging.stagingId}";
         const csrfToken = "${csrfToken}";
 

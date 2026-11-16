@@ -20,20 +20,20 @@
                 <p class="subtitle">Access your financial dashboard</p>
 
                 <c:if test="${not empty errorMessage}">
-                    <div class="alert alert-danger">
+                    <div class="alert alert-danger" role="alert">
                         <span><c:out value="${errorMessage}"/></span>
                     </div>
                 </c:if>
 
                 <c:if test="${not empty sessionScope.errorMessage}">
-                    <div class="alert alert-danger">
+                    <div class="alert alert-danger" role="alert">
                         <span><c:out value="${sessionScope.errorMessage}"/></span>
                     </div>
                     <c:remove var="errorMessage" scope="session"/>
                 </c:if>
 
                 <c:if test="${not empty sessionScope.successMessage}">
-                    <div class="alert alert-success">
+                    <div class="alert alert-success" role="status">
                         <span><c:out value="${sessionScope.successMessage}"/></span>
                     </div>
                     <c:remove var="successMessage" scope="session"/>
@@ -43,23 +43,23 @@
                     <div class="form-group">
                         <label for="email">Email Address</label>
                         <input type="email" id="email" name="email" class="form-control" 
-                               value="<c:out value="${enteredEmail}"/>" required placeholder="name@example.com" autofocus>
+                               value="<c:out value="${enteredEmail}"/>" required placeholder="name@example.com" autocomplete="email" autofocus>
                     </div>
 
                     <div class="form-group">
                         <label for="password">Password</label>
                         <input type="password" id="password" name="password" class="form-control" 
-                               required placeholder="••••••••">
+                               required placeholder="••••••••" autocomplete="current-password">
                     </div>
 
-                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                    <button type="submit" class="btn btn-primary auth-submit">
                         Sign In to FinSight
                     </button>
                 </form>
 
-                <p style="margin-top: 1.75rem; text-align: center; color: var(--text-muted); font-size: 0.95rem;">
+                <p class="auth-register">
                     Don't have an account? 
-                    <a href="${pageContext.request.contextPath}/register" style="color: var(--primary); font-weight: 600; text-decoration: none;">Create one here</a>
+                    <a href="${pageContext.request.contextPath}/register" class="auth-register-link">Create one here</a>
                 </p>
             </div>
         </div>
