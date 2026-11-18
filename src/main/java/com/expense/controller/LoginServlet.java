@@ -48,8 +48,8 @@ public class LoginServlet extends HttpServlet {
 
         if (user != null) {
             // Rotate session ID to protect against session fixation
-            request.changeSessionId();
             HttpSession session = request.getSession(true);
+            request.changeSessionId();
             session.setAttribute("user", user);
             session.setAttribute("successMessage", "Welcome back, " + user.getName() + "!");
             response.sendRedirect("dashboard");

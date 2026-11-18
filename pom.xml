@@ -21,6 +21,7 @@
         <jackson.version>2.17.2</jackson.version>
         <pdfbox.version>3.0.3</pdfbox.version>
         <junit.version>5.10.3</junit.version>
+        <javafx.version>17.0.13</javafx.version>
     </properties>
 
     <dependencies>
@@ -81,6 +82,13 @@
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Optional desktop preview component; excluded from the deployed WAR -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -100,6 +108,15 @@
                 <version>3.4.0</version>
                 <configuration>
                     <failOnMissingWebXml>true</failOnMissingWebXml>
+                    <packagingExcludes>WEB-INF/lib/javafx-*.jar</packagingExcludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>com.finsight.javafx.StatementReviewPreviewApp</mainClass>
                 </configuration>
             </plugin>
             <plugin>
