@@ -61,6 +61,9 @@
                     Don't have an account? 
                     <a href="${pageContext.request.contextPath}/register" class="auth-register-link">Create one here</a>
                 </p>
+                <p class="auth-register">
+                    <a href="${pageContext.request.contextPath}/forgot-password" class="auth-register-link">Forgot password?</a>
+                </p>
             </div>
         </div>
     </div>

@@ -22,6 +22,7 @@
         <pdfbox.version>3.0.3</pdfbox.version>
         <junit.version>5.10.3</junit.version>
         <javafx.version>17.0.13</javafx.version>
+        <angus.mail.version>2.0.3</angus.mail.version>
     </properties>
 
     <dependencies>
@@ -88,6 +89,13 @@
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- SMTP email delivery for password reset -->
+        <dependency>
+            <groupId>org.eclipse.angus</groupId>
+            <artifactId>angus-mail</artifactId>
+            <version>${angus.mail.version}</version>
         </dependency>
     </dependencies>
 

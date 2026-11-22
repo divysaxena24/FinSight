@@ -24,6 +24,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import com.expense.dao.TransactionDAO;
 import com.expense.dao.UserDAO;
+import com.expense.dao.PasswordResetDAO;
 import com.expense.model.Transaction;
 import com.expense.model.User;
 import com.expense.util.DBConnection;
@@ -102,6 +103,14 @@ public class SQLiteMigrationTest {
 
         boolean dupRegistered = userDAO.registerUser(duplicateUser);
         assertFalse(dupRegistered, "Duplicate registration with existing email must fail");
+
+        User caseVariantDuplicate = new User();
+        caseVariantDuplicate.setName("Alice Case Duplicate");
+        caseVariantDuplicate.setEmail("ALICE@EXAMPLE.COM");
+        caseVariantDuplicate.setPassword("AnotherPass!");
+
+        boolean caseVariantRegistered = userDAO.registerUser(caseVariantDuplicate);
+        assertFalse(caseVariantRegistered, "Email duplicates must be case-insensitive");
     }
 
     @Test
@@ -232,6 +241,26 @@ public class SQLiteMigrationTest {
         // Alice can still delete her own transaction
         boolean legitDelete = transactionDAO.deleteTransaction(aliceTxId, alice.getId());
         assertTrue(legitDelete, "Alice should be able to delete her own transaction");
+    }
+
+    @Test
+    @Order(7)
+    public void testPasswordResetTokenLifecycle() {
+        User alice = userDAO.loginUser("alice@example.com", "SecurePass123!");
+        assertNotNull(alice);
+
+        PasswordResetDAO passwordResetDAO = new PasswordResetDAO();
+        String token = passwordResetDAO.createToken(alice.getId());
+        assertNotNull(token);
+        assertTrue(passwordResetDAO.isTokenValid(token));
+
+        PasswordResetDAO.ResetResult result =
+                passwordResetDAO.resetPassword(token, "ResetPass123!");
+        assertEquals(PasswordResetDAO.ResetResult.SUCCESS, result);
+        assertFalse(passwordResetDAO.isTokenValid(token));
+
+        assertNotNull(userDAO.loginUser("alice@example.com", "ResetPass123!"));
+        assertNull(userDAO.loginUser("alice@example.com", "SecurePass123!"));
     }
 }
 

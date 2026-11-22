@@ -3,6 +3,7 @@ package com.expense.dao;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -17,19 +18,53 @@ public class UserDAO {
     private static final int LOCKOUT_MINUTES = 15;
     private static final DateTimeFormatter ISO_FMT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
-    // Register User with BCrypt password hashing & optional phone and PIN
-    public boolean registerUser(User user) {
+    /**
+     * Result of a typed registration attempt.
+     * <ul>
+     *   <li>SUCCESS         – row inserted successfully.</li>
+     *   <li>DUPLICATE_EMAIL – SQLITE_CONSTRAINT_UNIQUE (2067) or
+     *                         SQLITE_CONSTRAINT_PRIMARYKEY (1555) on the email column.</li>
+     *   <li>FAILURE         – any other error (connection failure, unexpected exception, etc.).</li>
+     * </ul>
+     */
+    public enum RegistrationResult {
+        SUCCESS,
+        DUPLICATE_EMAIL,
+        FAILURE
+    }
+
+    /**
+     * Attempts to register a user and returns a typed {@link RegistrationResult}.
+     * <p>
+     * Distinguishes duplicate-email constraint violations from all other failures.
+     * SQLExceptions are logged with their full cause chain and SQLite error codes.
+     * No passwords, PINs, or hashes are written to any log output.
+     */
+    public RegistrationResult registerUserWithResult(User user) {
         if (user == null || user.getEmail() == null || user.getPassword() == null) {
-            return false;
+            System.err.println("[UserDAO.registerUserWithResult] Rejected: null user, email, or password supplied.");
+            return RegistrationResult.FAILURE;
         }
 
         String sql = "INSERT INTO user(name, email, password, phone, transaction_pin) VALUES(?, ?, ?, ?, ?)";
+        String normalizedEmail = user.getEmail().trim().toLowerCase();
 
         try (Connection con = DBConnection.getConnection();
              PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
 
             if (con == null || ps == null) {
-                return false;
+                System.err.println("[UserDAO.registerUserWithResult] Failed to obtain DB connection. email=" + user.getEmail());
+                return RegistrationResult.FAILURE;
+            }
+
+            try (PreparedStatement duplicateCheck = con.prepareStatement(
+                    "SELECT id FROM user WHERE LOWER(TRIM(email)) = ? LIMIT 1")) {
+                duplicateCheck.setString(1, normalizedEmail);
+                try (ResultSet existing = duplicateCheck.executeQuery()) {
+                    if (existing.next()) {
+                        return RegistrationResult.DUPLICATE_EMAIL;
+                    }
+                }
             }
 
             String hashedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt(12));
@@ -39,18 +74,68 @@ public class UserDAO {
             }
 
             ps.setString(1, user.getName());
-            ps.setString(2, user.getEmail().trim().toLowerCase());
+            ps.setString(2, normalizedEmail);
             ps.setString(3, hashedPassword);
             ps.setString(4, user.getPhone() != null ? user.getPhone().trim() : null);
             ps.setString(5, hashedPin);
 
-            return ps.executeUpdate() > 0;
+            int rows = ps.executeUpdate();
+            return rows > 0 ? RegistrationResult.SUCCESS : RegistrationResult.FAILURE;
+
+        } catch (SQLException e) {
+            // Log the full exception chain with SQLite error codes — no passwords, PINs, or hashes.
+            logSQLExceptionChain("[UserDAO.registerUserWithResult] email=" + user.getEmail(), e);
+
+            /*
+             * SQLite extended constraint result codes (returned by getErrorCode() in xerial sqlite-jdbc):
+             *   SQLITE_CONSTRAINT_UNIQUE      = 2067  — unique index violation
+             *   SQLITE_CONSTRAINT_PRIMARYKEY  = 1555  — primary key violation
+             *
+             * Only these two are classified as DUPLICATE_EMAIL, because the user table's email
+             * column carries a UNIQUE constraint. Generic SQLITE_CONSTRAINT = 19 may represent
+             * any other constraint (CHECK, NOT NULL, FK, etc.) and is NOT treated as a duplicate.
+             */
+            int code = e.getErrorCode();
+            String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (code == 2067 || code == 1555
+                    || (code == 19 && message.contains("unique constraint failed")
+                        && message.contains("user.email"))) {
+                return RegistrationResult.DUPLICATE_EMAIL;
+            }
+            return RegistrationResult.FAILURE;
 
         } catch (Exception e) {
-            // Catches SQLite unique constraint violation (SQLITE_CONSTRAINT_UNIQUE)
-            e.printStackTrace();
+            System.err.println("[UserDAO.registerUserWithResult] Unexpected exception: "
+                    + e.getClass().getName() + ": " + e.getMessage());
+            e.printStackTrace(System.err);
+            return RegistrationResult.FAILURE;
+        }
+    }
+
+    /**
+     * Logs the full SQLException chain (SQLState, ErrorCode, Message for each linked exception),
+     * then prints the stack trace. No application data is logged.
+     */
+    private static void logSQLExceptionChain(String context, SQLException root) {
+        SQLException current = root;
+        int depth = 0;
+        while (current != null) {
+            System.err.printf("%s SQLException[%d]: SQLState=%s ErrorCode=%d Message=%s%n",
+                    context, depth, current.getSQLState(), current.getErrorCode(), current.getMessage());
+            current = current.getNextException();
+            depth++;
+        }
+        root.printStackTrace(System.err);
+    }
+
+    // Register User with BCrypt password hashing & optional phone and PIN.
+    // Preserved for backward-compatibility with existing tests.
+    // Delegates to registerUserWithResult() so both paths share the same logic.
+    public boolean registerUser(User user) {
+        if (user == null || user.getEmail() == null || user.getPassword() == null) {
             return false;
         }
+        return registerUserWithResult(user) == RegistrationResult.SUCCESS;
     }
 
     // Login User with BCrypt verification (and plain text backward-compatibility fallback)
