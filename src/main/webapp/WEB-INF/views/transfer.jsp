@@ -56,14 +56,14 @@
 
         <!-- Transfer Mode Switcher: Manual vs QR Transaction -->
         <div class="transfer-mode-switcher" role="tablist">
-            <button type="button" class="transfer-mode-btn active" id="manualModeBtn" role="tab" aria-selected="true" aria-controls="manualSection">
+            <button type="button" class="transfer-mode-btn active" id="manualModeBtn" onclick="switchTransferMode('manual')" role="tab" aria-selected="true" aria-controls="manualSection">
                 <span class="transfer-mode-icon">✍️</span>
                 <span class="transfer-mode-text">
                     <span class="transfer-mode-title">Manual Transaction</span>
                     <span class="transfer-mode-desc">Enter account number and details manually</span>
                 </span>
             </button>
-            <button type="button" class="transfer-mode-btn" id="qrModeBtn" role="tab" aria-selected="false" aria-controls="qrSection">
+            <button type="button" class="transfer-mode-btn" id="qrModeBtn" onclick="switchTransferMode('qr')" role="tab" aria-selected="false" aria-controls="qrSection">
                 <span class="transfer-mode-icon">⚡</span>
                 <span class="transfer-mode-text">
                     <span class="transfer-mode-title">QR Code Transaction</span>
@@ -145,6 +145,9 @@
         <!-- OPTION 2: QR BASED TRANSACTION SECTION                         -->
         <!-- ============================================================== -->
         <div id="qrSection" class="transfer-card" role="tabpanel" aria-labelledby="qrModeBtn" style="display: none;">
+            <div id="qrLibNotice" class="alert alert-warning" style="display: none; margin-bottom: 1.5rem;">
+                <strong>Notice:</strong> Camera scanner engine is unavailable. You can still use the <strong>Quick Payees</strong> or <strong>Paste Code</strong> options for instant transfers.
+            </div>
             
             <!-- STAGE A: QR SCAN / SELECTION VIEW -->
             <div id="qrScannerStage">
@@ -402,6 +405,45 @@
     <script src="${pageContext.request.contextPath}/js/qrcode.min.js"></script>
     <script src="${pageContext.request.contextPath}/js/qr-scanner.js"></script>
     <script>
+    // Global Tab Switching function: available immediately before any DOM event
+    window.switchTransferMode = function(mode) {
+        try {
+            const manualModeBtn = document.getElementById('manualModeBtn');
+            const qrModeBtn = document.getElementById('qrModeBtn');
+            const manualSection = document.getElementById('manualSection');
+            const qrSection = document.getElementById('qrSection');
+
+            if (mode === 'qr') {
+                if (qrModeBtn) {
+                    qrModeBtn.classList.add('active');
+                    qrModeBtn.setAttribute('aria-selected', 'true');
+                }
+                if (manualModeBtn) {
+                    manualModeBtn.classList.remove('active');
+                    manualModeBtn.setAttribute('aria-selected', 'false');
+                }
+                if (manualSection) manualSection.style.display = 'none';
+                if (qrSection) qrSection.style.display = 'block';
+            } else {
+                if (manualModeBtn) {
+                    manualModeBtn.classList.add('active');
+                    manualModeBtn.setAttribute('aria-selected', 'true');
+                }
+                if (qrModeBtn) {
+                    qrModeBtn.classList.remove('active');
+                    qrModeBtn.setAttribute('aria-selected', 'false');
+                }
+                if (manualSection) manualSection.style.display = 'block';
+                if (qrSection) qrSection.style.display = 'none';
+                if (window.qrScannerInstance && typeof window.qrScannerInstance.stopCamera === 'function') {
+                    window.qrScannerInstance.stopCamera();
+                }
+            }
+        } catch (e) {
+            console.error('switchTransferMode error:', e);
+        }
+    };
+
     document.addEventListener('DOMContentLoaded', function() {
         const contextPath = '${pageContext.request.contextPath}';
 
@@ -413,27 +455,17 @@
         const manualSection = document.getElementById('manualSection');
         const qrSection = document.getElementById('qrSection');
 
-        function switchMode(mode) {
-            if (mode === 'manual') {
-                manualModeBtn.classList.add('active');
-                manualModeBtn.setAttribute('aria-selected', 'true');
-                qrModeBtn.classList.remove('active');
-                qrModeBtn.setAttribute('aria-selected', 'false');
-                manualSection.style.display = 'block';
-                qrSection.style.display = 'none';
-                if (qrScanner) qrScanner.stopCamera();
-            } else {
-                qrModeBtn.classList.add('active');
-                qrModeBtn.setAttribute('aria-selected', 'true');
-                manualModeBtn.classList.remove('active');
-                manualModeBtn.setAttribute('aria-selected', 'false');
-                qrSection.style.display = 'block';
-                manualSection.style.display = 'none';
-            }
+        if (manualModeBtn) {
+            manualModeBtn.addEventListener('click', () => window.switchTransferMode('manual'));
+        }
+        if (qrModeBtn) {
+            qrModeBtn.addEventListener('click', () => window.switchTransferMode('qr'));
         }
 
-        manualModeBtn.addEventListener('click', () => switchMode('manual'));
-        qrModeBtn.addEventListener('click', () => switchMode('qr'));
+        if (typeof window.jsQR === 'undefined' && !('BarcodeDetector' in window)) {
+            const libNotice = document.getElementById('qrLibNotice');
+            if (libNotice) libNotice.style.display = 'block';
+        }
 
         const urlParams = new URLSearchParams(window.location.search);
         const initialMode = '${paramTransferMode != null ? paramTransferMode : param.mode}';
@@ -441,7 +473,7 @@
         const initialAmount = '<c:out value="${paramAmount != null ? paramAmount : ''}"/>';
 
         if (initialMode === 'qr' || urlParams.get('mode') === 'qr') {
-            switchMode('qr');
+            window.switchTransferMode('qr');
             if (initialRecipient) {
                 setTimeout(() => handleQrPayload(initialRecipient), 200);
             }
@@ -569,30 +601,43 @@
         const btnToggleCamera = document.getElementById('btnToggleCamera');
 
         let qrScanner = null;
-        if (qrVideo) {
-            qrScanner = new FinSightQRScanner({
-                videoElement: qrVideo,
-                overlayElement: qrOverlay,
-                onScanSuccess: handleQrPayload,
-                onScanError: function(msg) {
-                    cameraStatus.textContent = msg;
-                    btnToggleCamera.textContent = '▶️ Retry Camera';
-                }
-            });
+        try {
+            if (qrVideo && typeof FinSightQRScanner !== 'undefined') {
+                qrScanner = new FinSightQRScanner({
+                    videoElement: qrVideo,
+                    overlayElement: qrOverlay,
+                    onScanSuccess: handleQrPayload,
+                    onScanError: function(msg) {
+                        cameraStatus.textContent = msg;
+                        btnToggleCamera.textContent = '▶️ Retry Camera';
+                    }
+                });
+                window.qrScannerInstance = qrScanner;
 
-            btnToggleCamera.addEventListener('click', function() {
-                if (qrScanner.isScanning) {
-                    qrScanner.stopCamera();
-                    cameraStatus.textContent = 'Camera scanner stopped.';
-                    btnToggleCamera.textContent = '▶️ Start Camera Scanner';
-                } else {
-                    cameraStatus.textContent = 'Starting camera viewfinder...';
-                    qrScanner.startCamera().then(() => {
-                        cameraStatus.textContent = 'Point camera at any FinSight QR code';
-                        btnToggleCamera.textContent = '⏹️ Stop Camera';
-                    });
-                }
-            });
+                btnToggleCamera.addEventListener('click', function() {
+                    if (qrScanner.isScanning) {
+                        qrScanner.stopCamera();
+                        cameraStatus.textContent = 'Camera scanner stopped.';
+                        btnToggleCamera.textContent = '▶️ Start Camera Scanner';
+                    } else {
+                        cameraStatus.textContent = 'Starting camera viewfinder...';
+                        qrScanner.startCamera().then(() => {
+                            cameraStatus.textContent = 'Point camera at any FinSight QR code';
+                            btnToggleCamera.textContent = '⏹️ Stop Camera';
+                        }).catch(err => {
+                            cameraStatus.textContent = 'Camera permission was denied or camera is unavailable. You can upload a QR image or select from Quick Payees.';
+                            btnToggleCamera.textContent = '▶️ Retry Camera';
+                        });
+                    }
+                });
+            } else if (cameraStatus) {
+                cameraStatus.textContent = 'Camera scanning is not supported by your browser. Please upload a QR code image or choose a Quick Payee.';
+            }
+        } catch (scannerInitErr) {
+            console.warn('[FinSightQR] Scanner initialization failed:', scannerInitErr);
+            if (cameraStatus) {
+                cameraStatus.textContent = 'Camera scanner unavailable. Please upload a QR image or choose from Quick Payees.';
+            }
         }
 
         // Upload QR Image Handling
@@ -744,6 +789,12 @@
         btnRescanQR.addEventListener('click', function() {
             qrConfirmationStage.style.display = 'none';
             qrScannerStage.style.display = 'block';
+            qrRecipientAccount.value = '';
+            qrAmount.value = '';
+            const qrSelfTransferAlert = document.getElementById('qrSelfTransferAlert');
+            if (qrSelfTransferAlert) qrSelfTransferAlert.style.display = 'none';
+            const qrSubmitBtn = document.getElementById('qrSubmitBtn');
+            if (qrSubmitBtn) qrSubmitBtn.disabled = false;
             switchQrMethod('camera');
         });
 
