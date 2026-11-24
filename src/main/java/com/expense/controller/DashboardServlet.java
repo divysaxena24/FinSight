@@ -11,7 +11,9 @@ import com.finsight.simulator.dao.LedgerDAO;
 import com.finsight.simulator.model.Account;
 import com.finsight.simulator.model.FinancialHealthReport;
 import com.finsight.simulator.model.SimulatorTransaction;
+import com.finsight.simulator.controller.SubscriptionServlet;
 import com.finsight.simulator.service.FinancialIntelligenceService;
+import com.finsight.simulator.subscription.UserSubscription;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -87,6 +89,12 @@ public class DashboardServlet extends HttpServlet {
         request.setAttribute("userAccounts", userAccounts);
         request.setAttribute("recentSimTransactions", recentSimTransactions);
         request.setAttribute("healthReport", healthReport);
+
+        // Subscriptions & Renewal Reminders
+        List<UserSubscription> trackedSubscriptions = SubscriptionServlet.loadTracked(user.getId(), java.time.LocalDate.now());
+        List<UserSubscription> subscriptionReminders = SubscriptionServlet.reminders(trackedSubscriptions);
+        request.setAttribute("subscriptionReminders", subscriptionReminders);
+        request.setAttribute("trackedSubscriptions", trackedSubscriptions);
 
         request.getRequestDispatcher("/WEB-INF/views/dashboard.jsp").forward(request, response);
     }

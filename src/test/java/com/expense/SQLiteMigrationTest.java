@@ -12,6 +12,8 @@ import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterAll;
@@ -28,6 +30,8 @@ import com.expense.dao.PasswordResetDAO;
 import com.expense.model.Transaction;
 import com.expense.model.User;
 import com.expense.util.DBConnection;
+import com.finsight.simulator.dao.IntelligenceDAO;
+import com.finsight.simulator.service.BudgetLimitService;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class SQLiteMigrationTest {
@@ -261,6 +265,30 @@ public class SQLiteMigrationTest {
 
         assertNotNull(userDAO.loginUser("alice@example.com", "ResetPass123!"));
         assertNull(userDAO.loginUser("alice@example.com", "SecurePass123!"));
+    }
+
+    @Test
+    @Order(8)
+    public void testCategoryBudgetLimitAndHealthcareExemption() {
+        User alice = userDAO.loginUser("alice@example.com", "ResetPass123!");
+        assertNotNull(alice);
+
+        IntelligenceDAO intelligenceDAO = new IntelligenceDAO();
+        String monthYear = "2026-11";
+        assertTrue(intelligenceDAO.saveOrUpdateBudget(
+                alice.getId(), "Shopping", new BigDecimal("100.00"), monthYear));
+
+        BudgetLimitService limitService = new BudgetLimitService(intelligenceDAO);
+        LocalDate date = LocalDate.of(2026, 11, 20);
+
+        BudgetLimitService.CheckResult blocked =
+                limitService.checkExpense(alice.getId(), "Shopping", date, new BigDecimal("120.00"));
+        assertFalse(blocked.isAllowed());
+        assertTrue(blocked.getMessage().contains("budget limit exceeded"));
+
+        BudgetLimitService.CheckResult healthcare =
+                limitService.checkExpense(alice.getId(), "Healthcare", date, new BigDecimal("9999.00"));
+        assertTrue(healthcare.isAllowed());
     }
 }
 

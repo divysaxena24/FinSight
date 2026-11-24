@@ -28,6 +28,7 @@ public class BankingOperationsServlet extends HttpServlet {
     private final LedgerDAO ledgerDAO = new LedgerDAO();
     private final UserDAO userDAO = new UserDAO();
     private final FinancialIntelligenceService intelligenceService = new FinancialIntelligenceService();
+    private final com.finsight.simulator.service.BudgetLimitService budgetLimitService = new com.finsight.simulator.service.BudgetLimitService();
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -53,11 +54,79 @@ public class BankingOperationsServlet extends HttpServlet {
         request.setAttribute("accounts", accounts);
         request.setAttribute("user", user);
 
-        if ("deposit".equals(action)) {
+        if ("lookupAccount".equals(action)) {
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            String accountNo = request.getParameter("accountNumber");
+            if (accountNo == null || accountNo.trim().isEmpty()) {
+                response.getWriter().write("{\"valid\":false,\"message\":\"Account number is required.\"}");
+                return;
+            }
+            Account targetAcc = accountDAO.getAccountByNumber(accountNo.trim());
+            if (targetAcc == null || !targetAcc.isActive() || targetAcc.getAccountType() == Account.AccountType.CLEARING) {
+                response.getWriter().write("{\"valid\":false,\"message\":\"Account not found or inactive.\"}");
+                return;
+            }
+            User holder = userDAO.getUserById(targetAcc.getUserId());
+            String holderName = (holder != null && holder.getName() != null) ? holder.getName() : "FinSight Verified Account";
+            boolean isOwnAccount = (targetAcc.getUserId() == user.getId());
+
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("valid", true);
+            data.put("accountNumber", targetAcc.getAccountNumber());
+            data.put("accountType", targetAcc.getAccountType().name());
+            data.put("holderName", holderName);
+            data.put("isOwnAccount", isOwnAccount);
+            response.getWriter().write(mapper.writeValueAsString(data));
+            return;
+        } else if ("checkBudget".equals(action)) {
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            String cat = request.getParameter("category");
+            String amtStr = request.getParameter("amount");
+            BigDecimal amt = parseAmount(amtStr);
+            if (amt == null) amt = BigDecimal.ZERO;
+
+            com.finsight.simulator.service.BudgetLimitService.BudgetSummary summary = budgetLimitService.getBudgetSummary(user.getId(), cat, java.time.LocalDate.now());
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("hasBudget", summary.isHasBudget());
+            data.put("category", summary.getCategory());
+            data.put("limit", summary.getLimit());
+            data.put("spent", summary.getSpent());
+            data.put("remaining", summary.getRemaining());
+            data.put("requestedAmount", amt);
+
+            if (summary.isHasBudget() && amt.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal newTotal = summary.getSpent().add(amt);
+                boolean exceeds = newTotal.compareTo(summary.getLimit()) > 0;
+                data.put("exceeds", exceeds);
+                if (exceeds) {
+                    BigDecimal excess = newTotal.subtract(summary.getLimit());
+                    data.put("excessAmount", excess);
+                    data.put("message", "You are crossing your " + summary.getCategory()
+                            + " budget amount limit! Monthly limit: ₹" + summary.getLimit()
+                            + ", Current spent: ₹" + summary.getSpent()
+                            + ", Remaining: ₹" + summary.getRemaining()
+                            + ". This payment of ₹" + amt + " exceeds your budget by ₹" + excess + ". Do you still want to continue paying?");
+                } else {
+                    data.put("exceeds", false);
+                    data.put("excessAmount", BigDecimal.ZERO);
+                }
+            } else {
+                data.put("exceeds", false);
+                data.put("excessAmount", BigDecimal.ZERO);
+            }
+            response.getWriter().write(mapper.writeValueAsString(data));
+            return;
+        } else if ("deposit".equals(action)) {
             request.getRequestDispatcher("/WEB-INF/views/deposit.jsp").forward(request, response);
         } else if ("withdraw".equals(action)) {
             request.getRequestDispatcher("/WEB-INF/views/withdraw.jsp").forward(request, response);
         } else if ("transfer".equals(action)) {
+            List<Account> otherAccounts = accountDAO.getOtherActiveAccounts(user.getId(), 6);
+            request.setAttribute("otherAccounts", otherAccounts);
             request.getRequestDispatcher("/WEB-INF/views/transfer.jsp").forward(request, response);
         } else if ("receipt".equals(action)) {
             String ref = request.getParameter("ref");
@@ -180,8 +249,10 @@ public class BankingOperationsServlet extends HttpServlet {
             return;
         }
 
+        boolean overrideBudget = "true".equalsIgnoreCase(request.getParameter("overrideBudget"));
+
         TransactionExecutionResult result = ledgerDAO.executeWithdrawal(
-                user.getId(), accountId, amount, desc, cat != null ? cat : "Shopping", idempotencyKey);
+                user.getId(), accountId, amount, desc, cat != null ? cat : "Shopping", idempotencyKey, overrideBudget);
 
         if (result.isSuccess()) {
             // Anomaly evaluation hook
@@ -226,8 +297,43 @@ public class BankingOperationsServlet extends HttpServlet {
             return;
         }
 
+        String category = request.getParameter("category");
+        if (category == null || category.trim().isEmpty()) {
+            category = "Transfer";
+        } else {
+            category = category.trim();
+        }
+        boolean overrideBudget = "true".equalsIgnoreCase(request.getParameter("overrideBudget"));
+
+        // Enforce category budget check
+        com.finsight.simulator.service.BudgetLimitService.CheckResult budgetCheck = budgetLimitService.checkExpense(
+                user.getId(), category, java.time.LocalDate.now(), amount);
+        if (!budgetCheck.isAllowed() && !overrideBudget) {
+            request.setAttribute("errorMessage", budgetCheck.getMessage() + " You are crossing your budget amount limit. Do you still want to continue paying?");
+            request.setAttribute("budgetExceededWarning", true);
+            request.setAttribute("exceededCategory", category);
+            request.setAttribute("exceededLimit", budgetCheck.getLimit());
+            request.setAttribute("exceededSpent", budgetCheck.getSpent());
+            request.setAttribute("exceededRemaining", budgetCheck.getRemaining());
+            request.setAttribute("paramRecipientAccountNumber", recipientAccountNo);
+            request.setAttribute("paramAmount", amountStr);
+            request.setAttribute("paramDescription", desc);
+            request.setAttribute("paramCategory", category);
+            request.setAttribute("paramSourceAccountId", sourceAccountIdStr);
+            List<Account> otherAccounts = accountDAO.getOtherActiveAccounts(user.getId(), 6);
+            request.setAttribute("otherAccounts", otherAccounts);
+            request.getRequestDispatcher("/WEB-INF/views/transfer.jsp").forward(request, response);
+            return;
+        }
+
+        if (desc == null || desc.trim().isEmpty()) {
+            desc = "Transfer for " + category;
+        } else {
+            desc = desc.trim();
+        }
+
         TransactionExecutionResult result = ledgerDAO.executeTransfer(
-                user.getId(), sourceAccountId, recipientAccountNo.trim(), amount, desc, "Transfer", idempotencyKey);
+                user.getId(), sourceAccountId, recipientAccountNo.trim(), amount, desc, category, idempotencyKey, overrideBudget);
 
         if (result.isSuccess()) {
             intelligenceService.evaluateAndRecordAnomaly(user.getId(), result.getTransaction());

@@ -24,6 +24,7 @@ public class Account {
     private BigDecimal balance;
     private AccountStatus status;
     private String createdAt;
+    private String holderName;
 
     public Account() {
         this.balance = BigDecimal.ZERO;
@@ -38,6 +39,14 @@ public class Account {
         this.balance = balance != null ? balance : BigDecimal.ZERO;
         this.status = status != null ? status : AccountStatus.ACTIVE;
         this.createdAt = createdAt;
+    }
+
+    public String getHolderName() {
+        return holderName;
+    }
+
+    public void setHolderName(String holderName) {
+        this.holderName = holderName;
     }
 
     public int getId() {

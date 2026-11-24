@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import com.expense.model.User;
 import com.expense.service.TransactionService;
+import com.finsight.simulator.service.BudgetLimitService;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -17,6 +18,7 @@ public class AddTransactionServlet extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
     private final TransactionService transactionService = new TransactionService();
+    private final BudgetLimitService budgetLimitService = new BudgetLimitService();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
@@ -54,6 +56,23 @@ public class AddTransactionServlet extends HttpServlet {
             session.setAttribute("errorMessage", "Invalid amount entered. Please provide a valid number.");
             response.sendRedirect("addTransactionPage");
             return;
+        }
+
+        if ("Expense".equalsIgnoreCase(type)) {
+            boolean overrideBudget = "true".equalsIgnoreCase(request.getParameter("overrideBudget"));
+            java.time.LocalDate expenseDate;
+            try {
+                expenseDate = java.time.LocalDate.parse(transactionDate);
+            } catch (Exception e) {
+                expenseDate = java.time.LocalDate.now();
+            }
+            BudgetLimitService.CheckResult budgetCheck = budgetLimitService.checkExpense(
+                    user.getId(), category, expenseDate, java.math.BigDecimal.valueOf(amount));
+            if (!budgetCheck.isAllowed() && !overrideBudget) {
+                session.setAttribute("errorMessage", budgetCheck.getMessage() + " You are crossing your budget limit. Please confirm if you wish to proceed.");
+                response.sendRedirect("addTransactionPage");
+                return;
+            }
         }
 
         boolean created = transactionService.createTransaction(

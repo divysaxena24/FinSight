@@ -15,6 +15,69 @@ import com.finsight.simulator.model.CategoryBudget;
 public class IntelligenceDAO {
 
     // --- Budgets ---
+    public BigDecimal getBudgetLimitForMonth(int userId, String category, String monthYear) {
+        String sql = "SELECT monthly_limit FROM budgets "
+                + "WHERE user_id = ? AND month_year = ? "
+                + "AND LOWER(TRIM(category)) = LOWER(TRIM(?)) LIMIT 1";
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+            if (con == null || ps == null) return null;
+            ps.setInt(1, userId);
+            ps.setString(2, monthYear);
+            ps.setString(3, category);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return BigDecimal.valueOf(rs.getDouble("monthly_limit"))
+                            .setScale(2, java.math.RoundingMode.HALF_UP);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public BigDecimal getMonthlyCategorySpend(int userId, String category, String monthYear) {
+        BigDecimal spend = BigDecimal.ZERO;
+
+        String legacySql = "SELECT COALESCE(SUM(amount), 0) FROM transactions "
+                + "WHERE user_id = ? AND LOWER(type) = 'expense' "
+                + "AND LOWER(TRIM(category)) = LOWER(TRIM(?)) "
+                + "AND substr(transaction_date, 1, 7) = ?";
+        String withdrawalSql = "SELECT COALESCE(SUM(st.amount), 0) "
+                + "FROM simulator_transactions st "
+                + "JOIN accounts acc ON acc.id = st.source_account_id "
+                + "WHERE acc.user_id = ? AND st.transaction_type IN ('WITHDRAWAL', 'TRANSFER') "
+                + "AND LOWER(TRIM(st.category)) = LOWER(TRIM(?)) "
+                + "AND substr(st.created_at, 1, 7) = ?";
+
+        try (Connection con = DBConnection.getConnection()) {
+            if (con == null) return BigDecimal.ZERO;
+            try (PreparedStatement ps = con.prepareStatement(legacySql)) {
+                ps.setInt(1, userId);
+                ps.setString(2, category);
+                ps.setString(3, monthYear);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        spend = spend.add(BigDecimal.valueOf(rs.getDouble(1)));
+                    }
+                }
+            }
+            try (PreparedStatement ps = con.prepareStatement(withdrawalSql)) {
+                ps.setInt(1, userId);
+                ps.setString(2, category);
+                ps.setString(3, monthYear);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        spend = spend.add(BigDecimal.valueOf(rs.getDouble(1)));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return spend.setScale(2, java.math.RoundingMode.HALF_UP);
+    }
     public boolean saveOrUpdateBudget(int userId, String category, BigDecimal monthlyLimit, String monthYear) {
         String sql = "INSERT INTO budgets (user_id, category, monthly_limit, month_year) "
                 + "VALUES (?, ?, ?, ?) "

@@ -24,6 +24,7 @@
             <a href="${pageContext.request.contextPath}/banking?action=withdraw">Withdraw</a>
             <a href="${pageContext.request.contextPath}/viewTransaction">Transactions</a>
             <a href="${pageContext.request.contextPath}/budgets">Budgets</a>
+            <a href="${pageContext.request.contextPath}/subscriptions">Subscriptions</a>
             <a href="${pageContext.request.contextPath}/alerts">Alerts</a>
             <a href="${pageContext.request.contextPath}/health" class="active" aria-current="page">Financial Health</a>
             <a href="${pageContext.request.contextPath}/statement-analysis">Statements</a>

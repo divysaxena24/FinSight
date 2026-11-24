@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
-<body class="statement-report-page">
+<body class="statement-report-page statement-report-polish">
     <nav class="navbar">
         <a href="${pageContext.request.contextPath}/dashboard" class="brand">💰 FinSight</a>
         <button type="button" class="statement-report-mobile-toggle" aria-controls="statement-report-nav-links" aria-expanded="false">
@@ -40,9 +40,19 @@
         </div>
 
         <c:if test="${not empty sessionScope.successMessage}">
-            <div class="alert alert-success statement-report-success" role="status">
-                <span><c:out value="${sessionScope.successMessage}"/></span>
-            </div>
+            <c:choose>
+                <c:when test="${sessionScope.successMessage == 'No transactions were selected or eligible for import.'}">
+                    <div class="report-import-notice" role="status" aria-live="polite">
+                        <span class="report-notice-icon" aria-hidden="true">i</span>
+                        <span>No transactions imported.</span>
+                    </div>
+                </c:when>
+                <c:otherwise>
+                    <div class="alert alert-success statement-report-success" role="status">
+                        <span><c:out value="${sessionScope.successMessage}"/></span>
+                    </div>
+                </c:otherwise>
+            </c:choose>
             <c:remove var="successMessage" scope="session"/>
         </c:if>
 
@@ -96,12 +106,38 @@
         <!-- Charts Section -->
         <div class="chart-grid">
             <div class="card report-chart-card">
-            <h2>Expense Breakdown by Category</h2>
-            <div class="report-chart-area"><canvas id="categoryChart"></canvas></div>
+                <h2>Expense Breakdown by Category</h2>
+                <div class="report-chart-area">
+                    <c:choose>
+                        <c:when test="${not empty report.categoryExpenses}">
+                            <canvas id="categoryChart" role="img" aria-label="Expense breakdown by category"></canvas>
+                        </c:when>
+                        <c:otherwise>
+                            <div class="report-chart-empty" role="status">
+                                <span aria-hidden="true">◷</span>
+                                <strong>No category expenses</strong>
+                                <small>Category data will appear when expense transactions are available.</small>
+                            </div>
+                        </c:otherwise>
+                    </c:choose>
+                </div>
             </div>
             <div class="card report-chart-card">
-            <h2>Monthly Cash Flow (Income vs Net Expense)</h2>
-            <div class="report-chart-area"><canvas id="cashflowChart"></canvas></div>
+                <h2>Monthly Cash Flow</h2>
+                <div class="report-chart-area">
+                    <c:choose>
+                        <c:when test="${not empty report.monthlyCashFlows}">
+                            <canvas id="cashflowChart" role="img" aria-label="Monthly income and net expense chart"></canvas>
+                        </c:when>
+                        <c:otherwise>
+                            <div class="report-chart-empty" role="status">
+                                <span aria-hidden="true">▥</span>
+                                <strong>No cash-flow history</strong>
+                                <small>Monthly income and expense data will appear when available.</small>
+                            </div>
+                        </c:otherwise>
+                    </c:choose>
+                </div>
             </div>
         </div>
 
@@ -109,7 +145,7 @@
         <div class="report-insights-grid">
             <!-- Spending Intelligence Insights -->
             <div class="card report-section-card">
-            <h2>💡 Financial Insights & Alerts</h2>
+                <h2><span aria-hidden="true">💡</span> Financial Insights &amp; Alerts</h2>
                 <c:choose>
                     <c:when test="${empty result.financialInsights}">
                         <p class="report-empty-text">No unusual spending spikes or anomalous patterns detected.</p>
@@ -117,9 +153,15 @@
                     <c:otherwise>
                         <c:forEach var="ins" items="${result.financialInsights}">
                             <div class="insight-card ${ins.severity}">
+                                <div class="insight-card-heading">
+                                    <span class="insight-severity">${ins.severity}</span>
+                                </div>
                                 <div class="insight-title"><c:out value="${ins.title}"/></div>
                                 <div class="insight-explanation"><c:out value="${ins.explanation}"/></div>
-                                <div class="insight-evidence"><em><c:out value="${ins.calculationEvidence}"/></em></div>
+                                <details class="insight-evidence">
+                                    <summary>Calculation evidence</summary>
+                                    <em><c:out value="${ins.calculationEvidence}"/></em>
+                                </details>
                             </div>
                         </c:forEach>
                     </c:otherwise>
@@ -128,12 +170,13 @@
 
             <!-- Budget Recommendations -->
             <div class="card report-section-card">
-                <h2>🎯 Monthly Budget Recommendations</h2>
+                <h2><span aria-hidden="true">🎯</span> Monthly Budget Recommendations</h2>
                 <c:choose>
                     <c:when test="${empty result.budgetRecommendations}">
                         <div class="report-empty-panel">
-                            <strong>ℹ️ Insufficient Multi-Month History:</strong><br>
-                            Budget recommendations require at least 2 consecutive monthly statement cycles. Continue uploading statements to generate deterministic recommendations.
+                            <span class="budget-empty-icon" aria-hidden="true">◎</span>
+                            <strong>Insufficient multi-month history</strong>
+                            <p>Budget recommendations require at least 2 consecutive monthly statement cycles. Continue uploading statements to generate personalized targets.</p>
                         </div>
                     </c:when>
                     <c:otherwise>
@@ -152,29 +195,40 @@
                     </c:otherwise>
                 </c:choose>
             </div>
+        </div>
+
         <!-- Transaction Explorer -->
         <div class="card report-transactions-card">
             <div class="report-transactions-header">
-                <h2>📋 Statement Transactions Explorer</h2>
+                <h2><span aria-hidden="true">📋</span> Statement Transactions Explorer</h2>
                 <span>Showing ${report.transactions.size()} statement transactions</span>
             </div>
 
             <!-- Filters -->
             <div class="report-filter-controls">
-                <input type="text" id="reportSearchInput" placeholder="Search narration, merchant, or category..." class="form-control report-search-input">
-                <select id="reportTypeFilter" class="form-control">
-                    <option value="">All Types</option>
-                    <option value="Income">Income</option>
-                    <option value="Expense">Expense</option>
-                    <option value="Refund">Refund</option>
-                    <option value="Transfer">Transfer</option>
-                </select>
-                <select id="reportCatFilter" class="form-control">
-                    <option value="">All Categories</option>
-                    <c:forEach var="entry" items="${report.categoryExpenses}">
-                        <option value="${entry.key}"><c:out value="${entry.key}"/></option>
-                    </c:forEach>
-                </select>
+                <div class="report-filter-field report-search-field">
+                    <label for="reportSearchInput">Search transactions</label>
+                    <input type="search" id="reportSearchInput" placeholder="Narration, merchant, or category" class="form-control report-search-input">
+                </div>
+                <div class="report-filter-field">
+                    <label for="reportTypeFilter">Transaction type</label>
+                    <select id="reportTypeFilter" class="form-control">
+                        <option value="">All Types</option>
+                        <option value="Income">Income</option>
+                        <option value="Expense">Expense</option>
+                        <option value="Refund">Refund</option>
+                        <option value="Transfer">Transfer</option>
+                    </select>
+                </div>
+                <div class="report-filter-field">
+                    <label for="reportCatFilter">Category</label>
+                    <select id="reportCatFilter" class="form-control">
+                        <option value="">All Categories</option>
+                        <c:forEach var="entry" items="${report.categoryExpenses}">
+                            <option value="${entry.key}"><c:out value="${entry.key}"/></option>
+                        </c:forEach>
+                    </select>
+                </div>
             </div>
 
             <div class="table-responsive report-table-wrapper">
@@ -192,7 +246,7 @@
                     <tbody id="reportTxTableBody">
                         <c:forEach var="tx" items="${report.transactions}">
                             <tr class="report-tx-row">
-                                <td><c:out value="${tx.transactionDate}"/></td>
+                                <td class="report-date"><time datetime="<c:out value="${tx.transactionDate}"/>"><c:out value="${tx.transactionDate}"/></time></td>
                                 <td><c:out value="${tx.description}"/></td>
                                 <td><c:out value="${not empty tx.merchant ? tx.merchant : '—'}"/></td>
                                 <td><span class="badge report-category-badge"><c:out value="${tx.category}"/></span></td>
@@ -257,7 +311,17 @@
                         backgroundColor: ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#14b8a6', '#f43f5e']
                     }]
                 },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '58%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 10, boxHeight: 10, color: '#475569', padding: 12 }
+                        }
+                    }
+                }
             });
         }
 
@@ -288,7 +352,20 @@
                         { label: 'Net Expense', data: monthlyExpense, backgroundColor: '#ef4444' }
                     ]
                 },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { boxWidth: 10, boxHeight: 10, color: '#475569', padding: 12 }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#64748b' }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } }
+                    }
+                }
             });
         }
 

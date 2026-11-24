@@ -120,6 +120,31 @@ public class AccountDAO {
         return list;
     }
 
+    public List<Account> getOtherActiveAccounts(int excludeUserId, int limit) {
+        List<Account> list = new ArrayList<>();
+        String sql = "SELECT a.id, a.user_id, a.account_number, a.account_type, a.balance, a.status, a.created_at, u.name AS holder_name "
+                + "FROM accounts a "
+                + "LEFT JOIN user u ON a.user_id = u.id "
+                + "WHERE a.user_id != ? AND a.user_id != 0 AND a.status = 'ACTIVE' AND a.account_type != 'CLEARING' "
+                + "ORDER BY a.id ASC LIMIT ?";
+        try (Connection con = DBConnection.getConnection();
+             PreparedStatement ps = con != null ? con.prepareStatement(sql) : null) {
+            if (con == null || ps == null) return list;
+            ps.setInt(1, excludeUserId);
+            ps.setInt(2, limit > 0 ? limit : 6);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Account acc = mapAccount(rs);
+                    acc.setHolderName(rs.getString("holder_name"));
+                    list.add(acc);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
     public BigDecimal getTotalBalanceForUser(int userId) {
         String sql = "SELECT SUM(balance) FROM accounts WHERE user_id = ? AND status = 'ACTIVE'";
         try (Connection con = DBConnection.getConnection();
