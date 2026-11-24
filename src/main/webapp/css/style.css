@@ -4151,9 +4151,13 @@ textarea.form-control {
     color: var(--secondary);
     font-size: 1rem;
     font-weight: 600;
-    cursor: pointer;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 5;
     transition: all 0.2s ease;
     text-align: left;
+    user-select: none;
 }
 
 .transfer-mode-btn:hover {
