@@ -176,6 +176,7 @@ public class BankingOperationsServlet extends HttpServlet {
         String csrfToken = CsrfTokenManager.getOrCreateToken(session);
         request.setAttribute("csrfToken", csrfToken);
         request.setAttribute("accounts", accountDAO.getAccountsByUserId(user.getId()));
+        request.setAttribute("otherAccounts", accountDAO.getOtherActiveAccounts(user.getId(), 10));
         request.setAttribute("user", user);
 
         if ("deposit".equals(action)) {
@@ -272,9 +273,20 @@ public class BankingOperationsServlet extends HttpServlet {
         String desc = request.getParameter("description");
         String pin = request.getParameter("transactionPin");
         String idempotencyKey = request.getParameter("idempotencyKey");
+        String transferMode = request.getParameter("transferMode");
+        if (transferMode == null || transferMode.trim().isEmpty()) {
+            transferMode = "manual";
+        }
 
         BigDecimal amount = parseAmount(amountStr);
         int sourceAccountId = parseAccountId(sourceAccountIdStr);
+
+        // Helper to preserve request parameters on failure
+        request.setAttribute("paramTransferMode", transferMode);
+        request.setAttribute("paramRecipientAccountNumber", recipientAccountNo);
+        request.setAttribute("paramAmount", amountStr);
+        request.setAttribute("paramDescription", desc);
+        request.setAttribute("paramSourceAccountId", sourceAccountIdStr);
 
         // 1. PIN Verification
         if (pin == null || pin.trim().isEmpty()) {
@@ -303,6 +315,7 @@ public class BankingOperationsServlet extends HttpServlet {
         } else {
             category = category.trim();
         }
+        request.setAttribute("paramCategory", category);
         boolean overrideBudget = "true".equalsIgnoreCase(request.getParameter("overrideBudget"));
 
         // Enforce category budget check
