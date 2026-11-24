@@ -11,13 +11,17 @@
     <!-- Chart.js 4.4 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
-<body>
+<body class="dashboard-page">
     <nav class="navbar">
         <a href="${pageContext.request.contextPath}/dashboard" class="brand">
             💰 FinSight
         </a>
-        <div class="nav-links">
-            <a href="${pageContext.request.contextPath}/dashboard" style="color: var(--primary); font-weight: 700;">Dashboard</a>
+        <button type="button" class="dashboard-mobile-toggle" aria-controls="dashboard-nav-links" aria-expanded="false">
+            <span class="sr-only">Toggle navigation</span>
+            <span aria-hidden="true">☰</span>
+        </button>
+        <div class="nav-links" id="dashboard-nav-links">
+            <a href="${pageContext.request.contextPath}/dashboard" class="active" aria-current="page">Dashboard</a>
             <a href="${pageContext.request.contextPath}/accounts">My Accounts</a>
             <a href="${pageContext.request.contextPath}/banking?action=transfer">Transfer</a>
             <a href="${pageContext.request.contextPath}/banking?action=deposit">Deposit</a>
@@ -26,19 +30,19 @@
             <a href="${pageContext.request.contextPath}/budgets">Budgets</a>
             <a href="${pageContext.request.contextPath}/alerts">Alerts</a>
             <a href="${pageContext.request.contextPath}/health">Health</a>
-            <a href="${pageContext.request.contextPath}/statement-analysis" style="color: #0284c7; font-weight: 700;">📄 Statements</a>
+            <a href="${pageContext.request.contextPath}/statement-analysis">📄 Statements</a>
             <a href="${pageContext.request.contextPath}/profile">Profile</a>
             <a href="${pageContext.request.contextPath}/logout" class="btn-logout">Logout</a>
         </div>
     </nav>
 
-    <div class="container">
+    <div class="container dashboard-container">
         <div class="page-header">
             <div>
                 <h1 class="page-title">Welcome, <c:out value="${user.name}"/></h1>
                 <p class="page-subtitle">Digital Banking Simulator & Personal Finance Intelligence</p>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div class="dashboard-header-actions">
                 <a href="${pageContext.request.contextPath}/banking?action=deposit" class="btn btn-primary">+ Deposit</a>
                 <a href="${pageContext.request.contextPath}/banking?action=transfer" class="btn btn-secondary">Transfer</a>
                 <a href="${pageContext.request.contextPath}/addTransactionPage" class="btn btn-success">+ Record Expense</a>
@@ -46,21 +50,21 @@
         </div>
 
         <!-- Simulator Summary Banner -->
-        <div class="card" style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #1e293b, #0f172a); color: #fff; border-radius: 12px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
+        <div class="card dashboard-summary">
+            <div class="dashboard-summary-content">
                 <div>
-                    <span style="font-size: 0.85rem; text-transform: uppercase; color: #94a3b8; font-weight: 700; letter-spacing: 1px;">Total Simulator Balance</span>
-                    <div style="font-size: 2.25rem; font-weight: 900; color: #f8fafc; margin-top: 4px;">
+                    <span class="dashboard-summary-label">Total Simulator Balance</span>
+                    <div class="dashboard-summary-balance">
                         ₹<fmt:formatNumber value="${totalSimulatorBalance}" minFractionDigits="2"/>
                     </div>
-                    <div style="font-size: 0.85rem; color: #cbd5e1; margin-top: 4px;">
-                        Active Accounts: <strong>${userAccounts.size()}</strong> &bull; Financial Health Score: <strong style="color: #38bdf8;">${healthReport.score}/100 (<c:out value="${healthReport.statusCategory}"/>)</strong>
+                    <div class="dashboard-summary-supporting">
+                        Active Accounts: <strong>${userAccounts.size()}</strong> &bull; Financial Health Score: <strong>${healthReport.score}/100 (<c:out value="${healthReport.statusCategory}"/>)</strong>
                     </div>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <a href="${pageContext.request.contextPath}/accounts" class="btn btn-sm" style="background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25);">Manage Accounts</a>
-                    <a href="${pageContext.request.contextPath}/health" class="btn btn-sm" style="background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25);">Health Report</a>
-                    <a href="${pageContext.request.contextPath}/budgets" class="btn btn-sm" style="background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.25);">Budget Targets</a>
+                <div class="dashboard-summary-actions">
+                    <a href="${pageContext.request.contextPath}/accounts" class="btn btn-sm">Manage Accounts</a>
+                    <a href="${pageContext.request.contextPath}/health" class="btn btn-sm">Health Report</a>
+                    <a href="${pageContext.request.contextPath}/budgets" class="btn btn-sm">Budget Targets</a>
                 </div>
             </div>
         </div>
@@ -88,7 +92,7 @@
         <!-- Date Range Filter Toolbar -->
         <div class="filter-toolbar">
             <div class="filter-pills">
-                <span style="font-size: 0.85rem; font-weight: 700; color: var(--secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 0.25rem;">
+                <span class="dashboard-filter-label">
                     Period:
                 </span>
                 <a href="${pageContext.request.contextPath}/dashboard?range=1M" 
@@ -103,18 +107,18 @@
 
             <form action="${pageContext.request.contextPath}/dashboard" method="get" class="custom-range-form">
                 <input type="hidden" name="range" value="CUSTOM">
-                <span style="font-size: 0.85rem; font-weight: 600; color: var(--secondary);">Custom:</span>
+                <span class="dashboard-filter-label">Custom:</span>
                 <input type="date" name="startDate" class="form-control" 
                        value="<c:out value="${range.startDateString}"/>" required>
-                <span style="color: var(--text-muted); font-size: 0.85rem;">to</span>
+                <span class="dashboard-filter-separator">to</span>
                 <input type="date" name="endDate" class="form-control" 
                        value="<c:out value="${range.endDateString}"/>" required>
-                <button type="submit" class="btn btn-secondary btn-sm" style="padding: 0.45rem 0.85rem;">Apply</button>
+                <button type="submit" class="btn btn-secondary btn-sm">Apply</button>
             </form>
         </div>
 
         <!-- Active Date Indicator -->
-        <div style="margin-top: -1.25rem; margin-bottom: 1.75rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div class="dashboard-active-period">
             <div class="range-indicator">
                 <span>Active Period:</span>
                 <strong>
@@ -125,9 +129,9 @@
                         <c:otherwise>All Available Records</c:otherwise>
                     </c:choose>
                 </strong>
-                <span style="color: var(--text-muted); margin-left: 0.5rem;">(${range.filter})</span>
+                <span class="dashboard-filter-code">(${range.filter})</span>
             </div>
-            <div style="font-size: 0.875rem; color: var(--text-muted);">
+            <div class="dashboard-transaction-count">
                 Transactions in range: <strong><c:out value="${summary.transactionCount}"/></strong>
             </div>
         </div>
@@ -137,22 +141,23 @@
             <div class="metric-card income">
                 <div class="label">Total Income</div>
                 <div class="amount">₹<fmt:formatNumber value="${summary.totalIncome}" pattern="#,##0.00"/></div>
-                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Earnings in period</div>
+                <div class="metric-description">Earnings in period</div>
             </div>
 
             <div class="metric-card expense">
                 <div class="label">Total Expenses</div>
                 <div class="amount">₹<fmt:formatNumber value="${summary.totalExpense}" pattern="#,##0.00"/></div>
-                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Spending in period</div>
+                <div class="metric-description">Spending in period</div>
             </div>
 
             <div class="metric-card balance">
                 <div class="label">Net Balance</div>
                 <div class="amount">₹<fmt:formatNumber value="${summary.balance}" pattern="#,##0.00"/></div>
-                <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">
+                <div class="metric-description">
                     <c:choose>
-                        <c:when test="${summary.balance >= 0}">Healthy Cashflow</c:when>
-                        <c:otherwise><span style="color: var(--danger);">Deficit (Expenses exceed income)</span></c:otherwise>
+                        <c:when test="${summary.totalIncome == 0 and summary.totalExpense == 0}">No activity in period</c:when>
+                        <c:when test="${summary.balance >= 0}">Positive cashflow</c:when>
+                        <c:otherwise><span class="metric-description-danger">Deficit (Expenses exceed income)</span></c:otherwise>
                     </c:choose>
                 </div>
             </div>
@@ -172,15 +177,17 @@
                 <c:choose>
                     <c:when test="${hasChartData}">
                         <div class="chart-wrapper">
-                            <canvas id="monthlyTrendChart"></canvas>
+                            <canvas id="monthlyTrendChart" role="img" aria-label="Monthly income and expense trend"></canvas>
                         </div>
                     </c:when>
                     <c:otherwise>
-                        <div class="empty-state" style="padding: 2.5rem 1rem;">
-                            <p style="font-size: 1.05rem; font-weight: 600; color: var(--secondary);">No transaction activity in this timeline</p>
-                            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        <div class="empty-state dashboard-empty-state">
+                            <div class="dashboard-empty-state-icon" aria-hidden="true">📊</div>
+                            <h3>No activity in this period</h3>
+                            <p>
                                 Record transactions or adjust the date filter above to view your monthly financial trend.
                             </p>
+                            <a href="${pageContext.request.contextPath}/addTransactionPage" class="btn btn-primary btn-sm">Add your first transaction</a>
                         </div>
                     </c:otherwise>
                 </c:choose>
@@ -198,7 +205,7 @@
                 <c:choose>
                     <c:when test="${hasCategoryData}">
                         <div class="doughnut-wrapper">
-                            <canvas id="categoryDoughnutChart"></canvas>
+                            <canvas id="categoryDoughnutChart" role="img" aria-label="Expense breakdown by category"></canvas>
                         </div>
                         <div class="category-list" id="categoryBreakdownList">
                             <c:forEach var="item" items="${categoryData.items}">
@@ -216,11 +223,13 @@
                         </div>
                     </c:when>
                     <c:otherwise>
-                        <div class="empty-state" style="padding: 2.5rem 1rem;">
-                            <p style="font-size: 1.05rem; font-weight: 600; color: var(--secondary);">No expenses in this period</p>
-                            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 0.25rem;">
+                        <div class="empty-state dashboard-empty-state">
+                            <div class="dashboard-empty-state-icon" aria-hidden="true">🧾</div>
+                            <h3>No expenses in this period</h3>
+                            <p>
                                 When you record expense transactions in this timeline, their category breakdown will appear here.
                             </p>
+                            <a href="${pageContext.request.contextPath}/addTransactionPage" class="btn btn-primary btn-sm">Record an expense</a>
                         </div>
                     </c:otherwise>
                 </c:choose>
@@ -310,6 +319,20 @@
     <c:if test="${hasCategoryData}">
         <script id="categoryDataPayload" type="application/json"><c:out value="${categoryDataJson}" escapeXml="false"/></script>
     </c:if>
+
+    <script>
+        (function() {
+            var toggle = document.querySelector('.dashboard-mobile-toggle');
+            var nav = document.getElementById('dashboard-nav-links');
+
+            if (toggle && nav) {
+                toggle.addEventListener('click', function() {
+                    var isOpen = nav.classList.toggle('dashboard-nav-open');
+                    toggle.setAttribute('aria-expanded', String(isOpen));
+                });
+            }
+        })();
+    </script>
 
     <script>
         (function() {

@@ -83,23 +83,30 @@ public class RegisterServlet extends HttpServlet {
 
         User user = new User();
         user.setName(name.trim());
-        user.setEmail(email.trim());
+        user.setEmail(email.trim().toLowerCase());
         user.setPhone(phone != null ? phone.trim() : null);
         user.setPassword(password);
         if (pin != null && !pin.trim().isEmpty()) {
             user.setTransactionPin(pin.trim());
         }
 
-        boolean registered = userDAO.registerUser(user);
+        UserDAO.RegistrationResult result = userDAO.registerUserWithResult(user);
 
-        if (registered) {
+        if (result == UserDAO.RegistrationResult.SUCCESS) {
             HttpSession session = request.getSession(true);
             session.setAttribute("successMessage", "Registration successful! Please login with your credentials.");
             response.sendRedirect("login");
-        } else {
-            request.setAttribute("errorMessage", "An account with this email already exists or registration failed.");
+        } else if (result == UserDAO.RegistrationResult.DUPLICATE_EMAIL) {
+            request.setAttribute("errorMessage", "An account with this email already exists.");
             request.setAttribute("enteredName", name.trim());
             request.setAttribute("enteredEmail", email.trim());
+            request.setAttribute("enteredPhone", phone);
+            request.getRequestDispatcher("/WEB-INF/views/register.jsp").forward(request, response);
+        } else {
+            request.setAttribute("errorMessage", "Registration failed due to a server error. Please try again.");
+            request.setAttribute("enteredName", name.trim());
+            request.setAttribute("enteredEmail", email.trim());
+            request.setAttribute("enteredPhone", phone);
             request.getRequestDispatcher("/WEB-INF/views/register.jsp").forward(request, response);
         }
     }

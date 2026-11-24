@@ -10,7 +10,7 @@ import java.sql.Statement;
 
 public class DBConnection {
 
-    private static final String DEFAULT_DB_PATH = "D:/DIVY/webDev/Projects/FinSight/data/finsight.db";
+    private static final String DEFAULT_DB_PATH = "C:\\Users\\ASUS\\Desktop\\Beginners project\\FinSight\\data\\finsight.db";
     private static final ThreadLocal<String> threadLocalDbPath = new ThreadLocal<>();
     private static final java.util.Set<String> initializedDatabases = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
 
@@ -211,6 +211,21 @@ public class DBConnection {
                     + "status TEXT NOT NULL DEFAULT 'NEW' CHECK(status IN ('NEW', 'ACKNOWLEDGED')), "
                     + "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
                     + "FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE);");
+
+            // 8. Password Reset Tokens
+            stmt.execute("CREATE TABLE IF NOT EXISTS password_reset_tokens ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + "user_id INTEGER NOT NULL, "
+                    + "token_hash TEXT NOT NULL UNIQUE, "
+                    + "expires_at INTEGER NOT NULL, "
+                    + "used_at INTEGER, "
+                    + "created_at INTEGER NOT NULL, "
+                    + "FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE);");
+
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_password_reset_user "
+                    + "ON password_reset_tokens(user_id);");
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_password_reset_expiry "
+                    + "ON password_reset_tokens(expires_at);");
 
         } catch (SQLException e) {
             e.printStackTrace();

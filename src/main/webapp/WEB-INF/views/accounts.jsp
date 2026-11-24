@@ -8,26 +8,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FinSight | My Accounts</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css">
-    <style>
-        .account-card {
-            background: #fff;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.06);
-            border: 1px solid #e2e8f0;
-            transition: transform 0.15s ease;
-        }
-        .account-card:hover { transform: translateY(-2px); }
-        .acc-number { font-family: monospace; font-size: 1.15rem; font-weight: 700; color: #1e293b; letter-spacing: 1px; }
-        .acc-bal { font-size: 1.75rem; font-weight: 800; color: #0f172a; margin: 12px 0; }
-    </style>
 </head>
-<body>
+<body class="accounts-page">
     <nav class="navbar">
         <a href="${pageContext.request.contextPath}/dashboard" class="brand">💰 FinSight</a>
-        <div class="nav-links">
+        <button type="button" class="accounts-mobile-toggle" aria-controls="accounts-nav-links" aria-expanded="false">
+            <span class="sr-only">Toggle navigation</span>
+            <span aria-hidden="true">☰</span>
+        </button>
+        <div class="nav-links" id="accounts-nav-links">
             <a href="${pageContext.request.contextPath}/dashboard">Dashboard</a>
-            <a href="${pageContext.request.contextPath}/accounts" style="color: var(--primary); font-weight: 700;">My Accounts</a>
+            <a href="${pageContext.request.contextPath}/accounts" class="active" aria-current="page">My Accounts</a>
             <a href="${pageContext.request.contextPath}/banking?action=transfer">Transfer</a>
             <a href="${pageContext.request.contextPath}/banking?action=deposit">Deposit</a>
             <a href="${pageContext.request.contextPath}/banking?action=withdraw">Withdraw</a>
@@ -41,29 +32,29 @@
         </div>
     </nav>
 
-    <div class="container" style="max-width: 1100px; margin-top: 30px;">
-        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="container accounts-container">
+        <div class="page-header accounts-page-header">
             <div>
                 <h1 class="page-title">🏦 Simulated Banking Accounts</h1>
                 <p class="page-subtitle">Total Available Balance across all accounts: <strong>₹<fmt:formatNumber value="${totalBalance}" minFractionDigits="2"/></strong></p>
             </div>
-            <div>
+            <div class="accounts-header-action">
                 <!-- Create Account Trigger -->
-                <button type="button" class="btn btn-primary" onclick="document.getElementById('createModal').style.display='block'">
+                <button type="button" class="btn btn-primary account-modal-trigger" data-modal-target="createModal">
                     + Open New Account
                 </button>
             </div>
         </div>
 
         <c:if test="${not empty sessionScope.successMessage}">
-            <div class="alert alert-success" style="margin-bottom: 20px;">
+            <div class="alert alert-success" role="status">
                 <span><c:out value="${sessionScope.successMessage}"/></span>
             </div>
             <c:remove var="successMessage" scope="session"/>
         </c:if>
 
         <c:if test="${not empty sessionScope.errorMessage}">
-            <div class="alert alert-danger" style="margin-bottom: 20px;">
+            <div class="alert alert-danger" role="alert">
                 <span><c:out value="${sessionScope.errorMessage}"/></span>
             </div>
             <c:remove var="errorMessage" scope="session"/>
@@ -72,30 +63,29 @@
         <!-- Account Cards Grid -->
         <c:choose>
             <c:when test="${empty accounts}">
-                <div class="card" style="padding: 40px; text-align: center;">
+                <div class="card accounts-empty-state">
+                    <div class="accounts-empty-icon" aria-hidden="true">🏦</div>
                     <h3>No Simulated Accounts Found</h3>
-                    <p style="color: #64748b; margin: 10px 0 20px 0;">Open your first simulated savings or current account to deposit funds and execute simulated transfers.</p>
-                    <button type="button" class="btn btn-primary" onclick="document.getElementById('createModal').style.display='block'">Open Savings Account</button>
+                    <p>Open your first simulated savings or current account to deposit funds and execute simulated transfers.</p>
+                    <button type="button" class="btn btn-primary account-modal-trigger" data-modal-target="createModal">Open Savings Account</button>
                 </div>
             </c:when>
             <c:otherwise>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+                <div class="accounts-grid">
                     <c:forEach var="acc" items="${accounts}">
                         <div class="account-card">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span class="badge" style="background: ${acc.accountType == 'SAVINGS' ? '#e0f2fe' : '#fef3c7'}; color: ${acc.accountType == 'SAVINGS' ? '#0369a1' : '#b45309'}; padding: 4px 10px; border-radius: 20px; font-weight: 700; font-size: 0.75rem;">
-                                    <c:out value="${acc.accountType}"/> ACCOUNT
-                                </span>
-                                <span style="font-size: 0.8rem; color: #16a34a; font-weight: 600;">● Active</span>
+                            <div class="account-card-header">
+                                <h3 class="account-card-title"><c:out value="${acc.accountType}"/> Account</h3>
+                                <span class="account-status"><span aria-hidden="true">●</span> Active</span>
                             </div>
                             <div class="acc-bal">₹<fmt:formatNumber value="${acc.balance}" minFractionDigits="2"/></div>
-                            <div style="margin-bottom: 15px;">
-                                <div style="font-size: 0.75rem; color: #64748b; text-transform: uppercase;">Account Number</div>
+                            <div class="account-number-block">
+                                <div class="account-number-label">Account Number</div>
                                 <div class="acc-number"><c:out value="${acc.accountNumber}"/></div>
                             </div>
-                            <div style="display: flex; gap: 10px;">
-                                <a href="${pageContext.request.contextPath}/accounts?id=${acc.id}" class="btn btn-secondary btn-sm" style="flex: 1; text-align: center;">History</a>
-                                <a href="${pageContext.request.contextPath}/banking?action=deposit&accountId=${acc.id}" class="btn btn-primary btn-sm" style="flex: 1; text-align: center;">Deposit</a>
+                            <div class="account-card-actions">
+                                <a href="${pageContext.request.contextPath}/accounts?id=${acc.id}" class="btn btn-secondary btn-sm">History</a>
+                                <a href="${pageContext.request.contextPath}/banking?action=deposit&accountId=${acc.id}" class="btn btn-primary btn-sm">Deposit</a>
                             </div>
                         </div>
                     </c:forEach>
@@ -105,51 +95,51 @@
 
         <!-- Selected Account History Details -->
         <c:if test="${not empty selectedAccount}">
-            <div class="card" style="margin-top: 35px; padding: 25px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div class="card account-ledger-card">
+                <div class="account-ledger-header">
                     <div>
-                        <h2 style="font-size: 1.25rem; margin: 0;">Ledger History: <span style="font-family: monospace;"><c:out value="${selectedAccount.accountNumber}"/></span></h2>
-                        <span style="font-size: 0.85rem; color: #64748b;">
-                            Current Balance: <strong>₹<fmt:formatNumber value="${selectedAccount.balance}" minFractionDigits="2"/></strong>
-                            &bull; Reconciled Ledger: <strong>₹<fmt:formatNumber value="${reconciledBalance}" minFractionDigits="2"/></strong>
-                        </span>
+                        <h2>Ledger History: <span class="account-ledger-number"><c:out value="${selectedAccount.accountNumber}"/></span></h2>
+                        <div class="account-ledger-summary">
+                            <span>Current Balance: <strong class="account-ledger-balance">₹<fmt:formatNumber value="${selectedAccount.balance}" minFractionDigits="2"/></strong></span>
+                            <span>Reconciled Ledger: <strong>₹<fmt:formatNumber value="${reconciledBalance}" minFractionDigits="2"/></strong></span>
+                        </div>
                     </div>
-                    <div>
+                    <div class="account-ledger-action">
                         <a href="${pageContext.request.contextPath}/banking?action=transfer&sourceAccountId=${selectedAccount.id}" class="btn btn-primary btn-sm">Transfer from this Account</a>
                     </div>
                 </div>
 
-                <div class="table-responsive">
-                    <table class="table" style="width: 100%; border-collapse: collapse;">
+                <div class="table-container accounts-table-wrapper">
+                    <table class="data-table accounts-table">
                         <thead>
-                            <tr style="border-bottom: 2px solid #e2e8f0; text-align: left; font-size: 0.85rem; color: #64748b;">
+                            <tr>
                                 <th>Reference</th>
                                 <th>Date</th>
                                 <th>Type</th>
                                 <th>Description</th>
                                 <th>Category</th>
-                                <th style="text-align: right;">Amount</th>
+                                <th class="amount-column">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
                             <c:forEach var="tx" items="${accountHistory}">
-                                <tr style="border-bottom: 1px solid #f1f5f9; font-size: 0.9rem;">
-                                    <td style="font-family: monospace; font-weight: 600;"><c:out value="${tx.referenceNumber}"/></td>
+                                <tr>
+                                    <td class="transaction-reference"><c:out value="${tx.referenceNumber}"/></td>
                                     <td><c:out value="${tx.createdAt}"/></td>
                                     <td>
-                                        <span class="badge" style="background: #f1f5f9; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">
+                                        <span class="badge account-transaction-type">
                                             <c:out value="${tx.transactionType}"/>
                                         </span>
                                     </td>
                                     <td><c:out value="${tx.description}"/></td>
                                     <td><c:out value="${tx.category}"/></td>
-                                    <td style="text-align: right; font-weight: 700;">
+                                    <td class="amount-column transaction-amount">
                                         <c:choose>
                                             <c:when test="${tx.destinationAccountId == selectedAccount.id}">
-                                                <span style="color: #16a34a;">+₹<fmt:formatNumber value="${tx.amount}" minFractionDigits="2"/></span>
+                                                <span class="income-amount">+₹<fmt:formatNumber value="${tx.amount}" minFractionDigits="2"/></span>
                                             </c:when>
                                             <c:otherwise>
-                                                <span style="color: #dc2626;">-₹<fmt:formatNumber value="${tx.amount}" minFractionDigits="2"/></span>
+                                                <span class="expense-amount">-₹<fmt:formatNumber value="${tx.amount}" minFractionDigits="2"/></span>
                                             </c:otherwise>
                                         </c:choose>
                                     </td>
@@ -162,29 +152,95 @@
         </c:if>
 
         <!-- Create Account Modal Form -->
-        <div id="createModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
-            <div style="background: #fff; max-width: 450px; margin: 10% auto; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-                <h3 style="margin-top: 0;">Open New Simulated Account</h3>
+        <div id="createModal" class="account-modal" role="dialog" aria-modal="true" aria-labelledby="createModalTitle" aria-hidden="true">
+            <div class="account-modal-panel" role="document">
+                <button type="button" class="account-modal-close" aria-label="Close account creation dialog">&times;</button>
+                <h3 id="createModalTitle">Open New Simulated Account</h3>
                 <form action="${pageContext.request.contextPath}/accounts" method="post">
                     <input type="hidden" name="csrfToken" value="${csrfToken}">
                     <input type="hidden" name="action" value="create">
 
-                    <div class="form-group" style="margin-bottom: 20px;">
-                        <label>Account Type</label>
-                        <select name="accountType" class="form-control" required>
+                    <div class="form-group">
+                        <label for="accountType">Account Type</label>
+                        <select id="accountType" name="accountType" class="form-control" required>
                             <option value="SAVINGS">Savings Account</option>
                             <option value="CURRENT">Current Account</option>
                         </select>
                     </div>
 
-                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('createModal').style.display='none'">Cancel</button>
+                    <div class="account-modal-actions">
+                        <button type="button" class="btn btn-secondary account-modal-cancel">Cancel</button>
                         <button type="submit" class="btn btn-primary">Create Account</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
+    <script>
+        (function() {
+            var modal = document.getElementById('createModal');
+            var triggers = document.querySelectorAll('.account-modal-trigger');
+            var closeButton = document.querySelector('.account-modal-close');
+            var cancelButton = document.querySelector('.account-modal-cancel');
+            var firstFocusable;
+            var lastTrigger;
+
+            function getFocusableElements() {
+                return modal.querySelectorAll('button, select, input, textarea, a[href]');
+            }
+
+            function openModal(trigger) {
+                lastTrigger = trigger;
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                firstFocusable = modal.querySelector('#accountType');
+                if (firstFocusable) firstFocusable.focus();
+            }
+
+            function closeModal() {
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                if (lastTrigger) lastTrigger.focus();
+            }
+
+            triggers.forEach(function(trigger) {
+                trigger.addEventListener('click', function() {
+                    openModal(trigger);
+                });
+            });
+            closeButton.addEventListener('click', closeModal);
+            cancelButton.addEventListener('click', closeModal);
+            modal.addEventListener('click', function(event) {
+                if (event.target === modal) closeModal();
+            });
+            document.addEventListener('keydown', function(event) {
+                if (!modal.classList.contains('is-open')) return;
+                if (event.key === 'Escape') {
+                    closeModal();
+                    return;
+                }
+                if (event.key !== 'Tab') return;
+                var focusable = getFocusableElements();
+                if (!focusable.length) return;
+                if (event.shiftKey && document.activeElement === focusable[0]) {
+                    event.preventDefault();
+                    focusable[focusable.length - 1].focus();
+                } else if (!event.shiftKey && document.activeElement === focusable[focusable.length - 1]) {
+                    event.preventDefault();
+                    focusable[0].focus();
+                }
+            });
+
+            var navToggle = document.querySelector('.accounts-mobile-toggle');
+            var navLinks = document.getElementById('accounts-nav-links');
+            if (navToggle && navLinks) {
+                navToggle.addEventListener('click', function() {
+                    var isOpen = navLinks.classList.toggle('accounts-nav-open');
+                    navToggle.setAttribute('aria-expanded', String(isOpen));
+                });
+            }
+        })();
+    </script>
 </body>
 </html>
 
