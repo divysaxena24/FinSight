@@ -10,6 +10,11 @@ public class CategoryBudget {
     private BigDecimal monthlyLimit;
     private String monthYear; // e.g. "2026-11"
     private String createdAt;
+    private BigDecimal currentSpent = BigDecimal.ZERO;
+    private BigDecimal remaining = BigDecimal.ZERO;
+    private double percentage = 0.0;
+    private boolean exceeded = false;
+    private BigDecimal excessAmount = BigDecimal.ZERO;
 
     public CategoryBudget() {}
 
@@ -68,6 +73,46 @@ public class CategoryBudget {
 
     public void setCreatedAt(String createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public BigDecimal getCurrentSpent() {
+        return currentSpent;
+    }
+
+    public void setCurrentSpent(BigDecimal currentSpent) {
+        this.currentSpent = currentSpent != null ? currentSpent : BigDecimal.ZERO;
+    }
+
+    public BigDecimal getRemaining() {
+        return remaining;
+    }
+
+    public void setRemaining(BigDecimal remaining) {
+        this.remaining = remaining != null ? remaining : BigDecimal.ZERO;
+    }
+
+    public double getPercentage() {
+        return percentage;
+    }
+
+    public void setPercentage(double percentage) {
+        this.percentage = percentage;
+    }
+
+    public boolean isExceeded() {
+        return exceeded;
+    }
+
+    public void setExceeded(boolean exceeded) {
+        this.exceeded = exceeded;
+    }
+
+    public BigDecimal getExcessAmount() {
+        return excessAmount;
+    }
+
+    public void setExcessAmount(BigDecimal excessAmount) {
+        this.excessAmount = excessAmount != null ? excessAmount : BigDecimal.ZERO;
     }
 }
 

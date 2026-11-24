@@ -15,7 +15,7 @@
             <p>Reset access to your simulated banking and personal finance account securely.</p>
         </div>
         <div class="auth-content">
-            <div class="auth-box">
+            <div class="auth-box">            mvn clean package -DskipTests
                 <h2>Forgot Password</h2>
                 <p class="subtitle">Enter your registered email address</p>
 

@@ -17,11 +17,13 @@ import com.finsight.simulator.model.LedgerEntry.EntryType;
 import com.finsight.simulator.model.SimulatorTransaction;
 import com.finsight.simulator.model.SimulatorTransaction.TransactionStatus;
 import com.finsight.simulator.model.SimulatorTransaction.TransactionType;
+import com.finsight.simulator.service.BudgetLimitService;
 
 public class LedgerDAO {
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private final AccountDAO accountDAO = new AccountDAO();
+    private final BudgetLimitService budgetLimitService = new BudgetLimitService();
 
     public static class TransactionExecutionResult {
         private final boolean success;
@@ -108,6 +110,10 @@ public class LedgerDAO {
     }
 
     public TransactionExecutionResult executeWithdrawal(int userId, int accountId, BigDecimal amount, String description, String category, String idempotencyKey) {
+        return executeWithdrawal(userId, accountId, amount, description, category, idempotencyKey, false);
+    }
+
+    public TransactionExecutionResult executeWithdrawal(int userId, int accountId, BigDecimal amount, String description, String category, String idempotencyKey, boolean overrideBudget) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             return new TransactionExecutionResult(false, "Withdrawal amount must be strictly greater than zero.", null, null);
         }
@@ -135,6 +141,17 @@ public class LedgerDAO {
                     return new TransactionExecutionResult(false, "Conflict: Idempotency key already used with differing transaction payload.", null, null);
                 }
                 return new TransactionExecutionResult(true, "Transaction already processed.", existing, account.getBalance());
+            }
+        }
+
+        if (!overrideBudget) {
+            BudgetLimitService.CheckResult budgetCheck = budgetLimitService.checkExpense(
+                    userId,
+                    category,
+                    java.time.LocalDate.now(),
+                    amount);
+            if (!budgetCheck.isAllowed()) {
+                return new TransactionExecutionResult(false, budgetCheck.getMessage(), null, account.getBalance());
             }
         }
 
@@ -185,6 +202,11 @@ public class LedgerDAO {
 
     public TransactionExecutionResult executeTransfer(int senderUserId, int sourceAccountId, String recipientAccountNumber,
                                                     BigDecimal amount, String description, String category, String idempotencyKey) {
+        return executeTransfer(senderUserId, sourceAccountId, recipientAccountNumber, amount, description, category, idempotencyKey, false);
+    }
+
+    public TransactionExecutionResult executeTransfer(int senderUserId, int sourceAccountId, String recipientAccountNumber,
+                                                    BigDecimal amount, String description, String category, String idempotencyKey, boolean overrideBudget) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             return new TransactionExecutionResult(false, "Transfer amount must be strictly greater than zero.", null, null);
         }
@@ -213,6 +235,18 @@ public class LedgerDAO {
 
         if (sourceAccount.getBalance().compareTo(amount) < 0) {
             return new TransactionExecutionResult(false, "Insufficient funds for transfer.", null, null);
+        }
+
+        // Check budget limit if not explicitly overridden by user
+        if (!overrideBudget && category != null && !category.trim().isEmpty()) {
+            BudgetLimitService.CheckResult budgetCheck = budgetLimitService.checkExpense(
+                    senderUserId,
+                    category,
+                    java.time.LocalDate.now(),
+                    amount);
+            if (!budgetCheck.isAllowed()) {
+                return new TransactionExecutionResult(false, budgetCheck.getMessage(), null, sourceAccount.getBalance());
+            }
         }
 
         // Idempotency check with payload validation

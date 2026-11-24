@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import com.expense.model.User;
 import com.expense.service.TransactionService;
+import com.finsight.simulator.service.BudgetLimitService;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -17,6 +18,7 @@ public class UpdateTransactionServlet extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
     private final TransactionService transactionService = new TransactionService();
+    private final BudgetLimitService budgetLimitService = new BudgetLimitService();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
@@ -57,6 +59,41 @@ public class UpdateTransactionServlet extends HttpServlet {
             session.setAttribute("errorMessage", "Invalid numeric values provided.");
             response.sendRedirect("viewTransaction");
             return;
+        }
+
+        if ("Expense".equalsIgnoreCase(type)) {
+            java.time.LocalDate expenseDate;
+            try {
+                expenseDate = java.time.LocalDate.parse(transactionDate);
+            } catch (Exception e) {
+                expenseDate = java.time.LocalDate.now();
+            }
+
+            com.expense.model.Transaction existing =
+                    transactionService.getTransaction(id, user.getId());
+
+            BudgetLimitService.CheckResult budgetCheck;
+            if (existing != null && "Expense".equalsIgnoreCase(existing.getType())) {
+                java.time.LocalDate existingDate =
+                        existing.getTransactionDate() != null
+                                ? existing.getTransactionDate().toLocalDate()
+                                : expenseDate;
+                budgetCheck = budgetLimitService.checkExpenseExcluding(
+                        user.getId(), category, expenseDate,
+                        java.math.BigDecimal.valueOf(amount),
+                        existing.getCategory(), existingDate,
+                        java.math.BigDecimal.valueOf(existing.getAmount()));
+            } else {
+                budgetCheck = budgetLimitService.checkExpense(
+                        user.getId(), category, expenseDate,
+                        java.math.BigDecimal.valueOf(amount));
+            }
+
+            if (!budgetCheck.isAllowed()) {
+                session.setAttribute("errorMessage", budgetCheck.getMessage());
+                response.sendRedirect("editTransaction?id=" + id);
+                return;
+            }
         }
 
         boolean updated = transactionService.updateTransaction(

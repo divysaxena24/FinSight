@@ -28,6 +28,7 @@
             <a href="${pageContext.request.contextPath}/banking?action=withdraw">Withdraw</a>
             <a href="${pageContext.request.contextPath}/viewTransaction">Transactions</a>
             <a href="${pageContext.request.contextPath}/budgets">Budgets</a>
+            <a href="${pageContext.request.contextPath}/subscriptions">Subscriptions</a>
             <a href="${pageContext.request.contextPath}/alerts">Alerts</a>
             <a href="${pageContext.request.contextPath}/health">Health</a>
             <a href="${pageContext.request.contextPath}/statement-analysis">📄 Statements</a>
@@ -48,6 +49,43 @@
                 <a href="${pageContext.request.contextPath}/addTransactionPage" class="btn btn-success">+ Record Expense</a>
             </div>
         </div>
+
+        <!-- Subscription Renewal Deadline Reminders (Within 7 Days) -->
+        <c:if test="${not empty subscriptionReminders}">
+            <div class="subscription-reminders-container" style="margin-bottom: 24px;">
+                <c:forEach var="rem" items="${subscriptionReminders}">
+                    <div class="alert" style="display: flex; align-items: center; justify-content: space-between; border-left: 6px solid ${rem.alertColor}; background: ${rem.alertBgColor}; color: ${rem.alertColor}; border: 1px solid ${rem.alertBorderColor}; padding: 14px 18px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+                        <div style="display: flex; align-items: center; gap: 14px;">
+                            <span style="font-size: 1.6rem; line-height: 1;">
+                                <c:choose>
+                                    <c:when test="${rem.alertLevel == 'red'}">&#9888;&#65039;</c:when>
+                                    <c:when test="${rem.alertLevel == 'orange'}">&#9200;</c:when>
+                                    <c:otherwise>&#128197;</c:otherwise>
+                                </c:choose>
+                            </span>
+                            <div>
+                                <strong style="font-size: 0.95rem; display: block; margin-bottom: 2px;">
+                                    Subscription Renewal Notice &bull; <c:out value="${rem.displayName}"/> (<c:out value="${rem.planName}"/>)
+                                </strong>
+                                <span style="font-size: 0.9rem; line-height: 1.4;">
+                                    <c:out value="${rem.reminderMessage}"/>
+                                </span>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; flex-shrink: 0;">
+                            <span class="badge" style="background: ${rem.alertLevel == 'red' ? '#fee2e2' : (rem.alertLevel == 'orange' ? '#fef3c7' : '#dbeafe')}; color: ${rem.alertLevel == 'red' ? '#991b1b' : (rem.alertLevel == 'orange' ? '#92400e' : '#1e40af')}; font-weight: 700; padding: 6px 10px; border-radius: 20px; font-size: 0.8rem;">
+                                <c:choose>
+                                    <c:when test="${rem.daysRemaining == 0}">Due Today!</c:when>
+                                    <c:when test="${rem.daysRemaining == 1}">Due Tomorrow</c:when>
+                                    <c:otherwise>${rem.daysRemaining} days left</c:otherwise>
+                                </c:choose>
+                            </span>
+                            <a href="${pageContext.request.contextPath}/subscriptions" class="btn btn-sm btn-secondary" style="font-size: 0.82rem; padding: 6px 12px;">Manage</a>
+                        </div>
+                    </div>
+                </c:forEach>
+            </div>
+        </c:if>
 
         <!-- Simulator Summary Banner -->
         <div class="card dashboard-summary">

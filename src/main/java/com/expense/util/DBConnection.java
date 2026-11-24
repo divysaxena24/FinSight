@@ -227,6 +227,28 @@ public class DBConnection {
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_password_reset_expiry "
                     + "ON password_reset_tokens(expires_at);");
 
+            // 9. Subscriptions the user chooses to track (catalog or their own)
+            stmt.execute("CREATE TABLE IF NOT EXISTS user_subscriptions ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + "user_id INTEGER NOT NULL, "
+                    + "catalog_code TEXT, "
+                    + "display_name TEXT NOT NULL, "
+                    + "plan_code TEXT, "
+                    + "plan_name TEXT NOT NULL, "
+                    + "price_paise INTEGER NOT NULL CHECK(price_paise > 0), "
+                    + "cycle_months INTEGER NOT NULL DEFAULT 0, "
+                    + "cycle_days INTEGER NOT NULL DEFAULT 0, "
+                    + "start_date TEXT NOT NULL, "
+                    + "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                    + "CHECK((cycle_months > 0 AND cycle_days = 0) OR (cycle_months = 0 AND cycle_days > 0)), "
+                    + "FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE);");
+
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user "
+                    + "ON user_subscriptions(user_id);");
+            stmt.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_subscriptions_catalog "
+                    + "ON user_subscriptions(user_id, catalog_code) "
+                    + "WHERE catalog_code IS NOT NULL;");
+
         } catch (SQLException e) {
             e.printStackTrace();
         }

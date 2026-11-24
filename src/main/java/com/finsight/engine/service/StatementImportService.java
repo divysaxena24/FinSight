@@ -9,6 +9,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import com.expense.dao.TransactionDAO;
 import com.expense.model.Transaction;
@@ -17,6 +19,7 @@ import com.finsight.engine.model.ParsedTransaction.TransactionType;
 import com.finsight.engine.staging.StagingSession;
 import com.finsight.engine.staging.StagingSession.ImportStatus;
 import com.finsight.engine.staging.StagingSession.StagedTransactionItem;
+import com.finsight.simulator.service.BudgetLimitService;
 
 /**
  * Service orchestrating secure atomic import of staged transactions into the database.
@@ -25,13 +28,19 @@ import com.finsight.engine.staging.StagingSession.StagedTransactionItem;
 public class StatementImportService {
 
     private final TransactionDAO transactionDAO;
+    private final BudgetLimitService budgetLimitService;
 
     public StatementImportService() {
-        this(new TransactionDAO());
+        this(new TransactionDAO(), new BudgetLimitService());
     }
 
     public StatementImportService(TransactionDAO transactionDAO) {
+        this(transactionDAO, new BudgetLimitService());
+    }
+
+    public StatementImportService(TransactionDAO transactionDAO, BudgetLimitService budgetLimitService) {
         this.transactionDAO = Objects.requireNonNull(transactionDAO, "transactionDAO must not be null");
+        this.budgetLimitService = Objects.requireNonNull(budgetLimitService, "BudgetLimitService must not be null");
     }
 
     public static class ImportResult {
@@ -102,8 +111,33 @@ public class StatementImportService {
         try {
             List<StagedTransactionItem> items = session.getItemsList();
             List<Transaction> toImport = new ArrayList<>();
+            List<BudgetLimitService.ExpenseRequest> expenseRequests = new ArrayList<>();
             int skippedCount = 0;
             List<String> warnings = new ArrayList<>();
+
+            for (StagedTransactionItem item : items) {
+                if (!item.isSelected() || item.getTransaction().isConfirmedDuplicate()) continue;
+                ParsedTransaction pt = item.getTransaction();
+                if (pt.getTransactionType() == TransactionType.EXPENSE
+                        && pt.getAmount() != null
+                        && pt.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+                    LocalDate expenseDate = pt.getTransactionDate() != null
+                            ? pt.getTransactionDate()
+                            : LocalDate.now();
+                    expenseRequests.add(new BudgetLimitService.ExpenseRequest(
+                            pt.getCategory(), expenseDate, pt.getAmount()));
+                }
+            }
+
+            BudgetLimitService.CheckResult budgetCheck =
+                    budgetLimitService.checkBatch(userId, expenseRequests);
+            if (!budgetCheck.isAllowed()) {
+                commitSucceeded = true;
+                session.releaseImportClaim();
+                return new ImportResult(false, 0, 0,
+                        "Import blocked: " + budgetCheck.getMessage(),
+                        Collections.singletonList(budgetCheck.getMessage()));
+            }
 
             // Retrieve existing transactions to prevent double-inserting identical records
             List<Transaction> existingTxs = transactionDAO.getTransactionsByUser(userId);

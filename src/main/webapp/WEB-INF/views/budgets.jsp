@@ -24,6 +24,7 @@
             <a href="${pageContext.request.contextPath}/banking?action=withdraw">Withdraw</a>
             <a href="${pageContext.request.contextPath}/viewTransaction">Transactions</a>
             <a href="${pageContext.request.contextPath}/budgets" class="active" aria-current="page">Budgets</a>
+            <a href="${pageContext.request.contextPath}/subscriptions">Subscriptions</a>
             <a href="${pageContext.request.contextPath}/alerts">Alerts</a>
             <a href="${pageContext.request.contextPath}/health">Financial Health</a>
             <a href="${pageContext.request.contextPath}/statement-analysis">Statements</a>
@@ -96,7 +97,8 @@
 
                     <select name="category" class="form-control" required>
                         <option value="Shopping">Shopping</option>
-                        <option value="Food & Dining">Food & Dining</option>
+                        <option value="Food & Dining">Food</option>
+                        <option value="Rent">Rent</option>
                         <option value="Utilities">Bills & Utilities</option>
                         <option value="Entertainment">Entertainment</option>
                         <option value="Travel">Travel</option>
@@ -107,6 +109,7 @@
                     <input type="number" step="0.01" min="1" name="monthlyLimit" placeholder="Limit (₹)" class="form-control" required>
                     <button type="submit" class="btn btn-primary btn-sm">Save</button>
                 </form>
+                <p class="budget-healthcare-note">Healthcare spending is excluded from strict monthly limit enforcement.</p>
 
                 <c:choose>
                     <c:when test="${empty acceptedBudgets}">
@@ -116,17 +119,50 @@
                         <div class="budget-table-wrapper">
                         <table class="data-table budget-table">
                             <thead>
-                                    <tr>
+                                <tr>
                                     <th>Category</th>
-                                        <th class="amount-column">Monthly Target</th>
+                                    <th class="amount-column">Monthly Target</th>
+                                    <th class="amount-column">Spent (Month)</th>
+                                    <th class="amount-column">Remaining</th>
+                                    <th style="min-width: 140px;">Utilization & Status</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <c:forEach var="b" items="${acceptedBudgets}">
                                     <tr>
-                                        <td class="budget-table-category"><c:out value="${b.category}"/></td>
+                                        <td class="budget-table-category">
+                                            <strong><c:out value="${b.category}"/></strong>
+                                        </td>
                                         <td class="amount-column budget-table-amount">
                                             ₹<fmt:formatNumber value="${b.monthlyLimit}" minFractionDigits="2"/>
+                                        </td>
+                                        <td class="amount-column" style="font-weight: 600; color: ${b.exceeded ? '#dc2626' : '#0f172a'};">
+                                            ₹<fmt:formatNumber value="${b.currentSpent}" minFractionDigits="2"/>
+                                        </td>
+                                        <td class="amount-column" style="font-weight: 600; color: ${b.remaining == 0 ? '#dc2626' : '#16a34a'};">
+                                            ₹<fmt:formatNumber value="${b.remaining}" minFractionDigits="2"/>
+                                        </td>
+                                        <td>
+                                            <c:choose>
+                                                <c:when test="${b.exceeded}">
+                                                    <span class="badge-exceeded">
+                                                        ⚠️ Exceeded by ₹<fmt:formatNumber value="${b.excessAmount}" minFractionDigits="2"/>
+                                                    </span>
+                                                    <div class="budget-progress-bar-bg">
+                                                        <div class="budget-progress-bar-fill budget-progress-red" style="width: 100%;"></div>
+                                                    </div>
+                                                </c:when>
+                                                <c:otherwise>
+                                                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #475569; font-weight: 600;">
+                                                        <span><fmt:formatNumber value="${b.percentage}" maxFractionDigits="1"/>%</span>
+                                                        <span><fmt:formatNumber value="${b.remaining}" minFractionDigits="0"/> left</span>
+                                                    </div>
+                                                    <div class="budget-progress-bar-bg">
+                                                        <div class="budget-progress-bar-fill ${b.percentage > 85 ? 'budget-progress-yellow' : 'budget-progress-green'}"
+                                                             style="width: ${b.percentage > 100 ? 100 : b.percentage}%;"></div>
+                                                    </div>
+                                                </c:otherwise>
+                                            </c:choose>
                                         </td>
                                     </tr>
                                 </c:forEach>

@@ -24,6 +24,7 @@
             <a href="${pageContext.request.contextPath}/banking?action=withdraw" class="active" aria-current="page">Withdraw</a>
             <a href="${pageContext.request.contextPath}/viewTransaction">Transactions</a>
             <a href="${pageContext.request.contextPath}/budgets">Budgets</a>
+            <a href="${pageContext.request.contextPath}/subscriptions">Subscriptions</a>
             <a href="${pageContext.request.contextPath}/alerts">Alerts</a>
             <a href="${pageContext.request.contextPath}/health">Financial Health</a>
             <a href="${pageContext.request.contextPath}/statement-analysis">Statements</a>
@@ -50,6 +51,8 @@
                 <input type="hidden" name="action" value="withdraw">
                 <input type="hidden" name="idempotencyKey" value="<%= java.util.UUID.randomUUID().toString() %>">
 
+                <input type="hidden" name="overrideBudget" id="withdrawOverrideBudget" value="false">
+
                 <div class="form-group">
                     <label for="withdrawAccount">Source Account</label>
                     <select id="withdrawAccount" name="accountId" class="form-control" required>
@@ -64,6 +67,7 @@
                 <div class="form-group">
                     <label for="withdrawAmount">Withdrawal Amount (₹)</label>
                     <input type="number" id="withdrawAmount" step="0.01" min="1" max="10000000" name="amount" class="form-control" placeholder="e.g. 2000.00" required autofocus>
+                    <div id="withdrawBudgetWarning" class="budget-limit-warning" style="display: none;"></div>
                 </div>
 
                 <div class="form-group">
@@ -96,8 +100,25 @@
             </form>
         </div>
     </div>
+
+    <!-- Budget Exceeded Modal -->
+    <div class="modal-backdrop-budget" id="withdrawBudgetModal" style="display: none;">
+        <div class="modal-card-budget">
+            <div class="modal-budget-icon">⚠️</div>
+            <h3 class="modal-budget-title">Budget Limit Warning</h3>
+            <p id="withdrawModalMessage" class="modal-budget-desc">
+                You are crossing your budget amount limit! Do you still want to continue?
+            </p>
+            <div class="modal-budget-actions">
+                <button type="button" class="btn btn-secondary" id="btnCancelWithdrawPay">Cancel / Change Amount</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmWithdrawPay" style="background: #dc2626; border-color: #dc2626; color: #fff;">Yes, Continue Withdrawing</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         (function() {
+            var contextPath = '${pageContext.request.contextPath}';
             var navToggle = document.querySelector('.withdraw-mobile-toggle');
             var navLinks = document.getElementById('withdraw-nav-links');
             if (navToggle && navLinks) {
@@ -106,6 +127,80 @@
                     navToggle.setAttribute('aria-expanded', String(isOpen));
                 });
             }
+
+            var categorySelect = document.getElementById('withdrawCategory');
+            var amountInput = document.getElementById('withdrawAmount');
+            var warningEl = document.getElementById('withdrawBudgetWarning');
+            var formEl = document.querySelector('form');
+            var overrideInput = document.getElementById('withdrawOverrideBudget');
+
+            var modalEl = document.getElementById('withdrawBudgetModal');
+            var modalMsg = document.getElementById('withdrawModalMessage');
+            var btnCancel = document.getElementById('btnCancelWithdrawPay');
+            var btnConfirm = document.getElementById('btnConfirmWithdrawPay');
+
+            var budgetExceededState = false;
+            var budgetTimer = null;
+
+            function checkWithdrawBudget() {
+                var cat = categorySelect.value;
+                var amt = amountInput.value.trim();
+                if (!cat || !amt || parseFloat(amt) <= 0) {
+                    warningEl.style.display = 'none';
+                    budgetExceededState = false;
+                    return;
+                }
+
+                fetch(contextPath + '/banking?action=checkBudget&category=' + encodeURIComponent(cat) + '&amount=' + encodeURIComponent(amt))
+                    .then(function(res) { return res.json(); })
+                    .then(function(data) {
+                        if (data.hasBudget) {
+                            budgetExceededState = data.exceeds;
+                            if (data.exceeds) {
+                                warningEl.className = 'budget-limit-warning exceeded-alert';
+                                warningEl.innerHTML = '<span class="budget-warning-icon">⚠️</span><span><strong>Budget Limit Exceeded:</strong> Monthly limit for ' + data.category + ' is ₹' + Number(data.limit).toFixed(2) + '. Current spent: ₹' + Number(data.spent).toFixed(2) + ', Remaining: ₹' + Number(data.remaining).toFixed(2) + '. This withdrawal crosses your limit by ₹' + Number(data.excessAmount).toFixed(2) + '.</span>';
+                                warningEl.style.display = 'flex';
+                            } else {
+                                warningEl.className = 'budget-limit-warning';
+                                warningEl.innerHTML = '<span class="budget-warning-icon">ℹ️</span><span><strong>Budget Status:</strong> ' + data.category + ' limit is ₹' + Number(data.limit).toFixed(2) + '. Remaining after this withdrawal: ₹' + (Number(data.remaining) - Number(amt)).toFixed(2) + '.</span>';
+                                warningEl.style.display = 'flex';
+                            }
+                        } else {
+                            warningEl.style.display = 'none';
+                            budgetExceededState = false;
+                        }
+                    })
+                    .catch(function() {});
+            }
+
+            categorySelect.addEventListener('change', function() {
+                clearTimeout(budgetTimer);
+                budgetTimer = setTimeout(checkWithdrawBudget, 300);
+            });
+
+            amountInput.addEventListener('input', function() {
+                clearTimeout(budgetTimer);
+                budgetTimer = setTimeout(checkWithdrawBudget, 300);
+            });
+
+            formEl.addEventListener('submit', function(e) {
+                if (overrideInput.value === 'true') return;
+                if (budgetExceededState) {
+                    e.preventDefault();
+                    modalMsg.textContent = 'You are crossing your ' + categorySelect.value + ' budget amount limit! Do you still want to continue paying?';
+                    modalEl.style.display = 'flex';
+                }
+            });
+
+            btnCancel.addEventListener('click', function() {
+                modalEl.style.display = 'none';
+            });
+
+            btnConfirm.addEventListener('click', function() {
+                modalEl.style.display = 'none';
+                overrideInput.value = 'true';
+                formEl.submit();
+            });
         })();
     </script>
 </body>
