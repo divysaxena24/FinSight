@@ -79,6 +79,7 @@
             <form action="${pageContext.request.contextPath}/banking" method="post" id="manualTransferForm">
                 <input type="hidden" name="csrfToken" value="${csrfToken}">
                 <input type="hidden" name="action" value="transfer">
+                <input type="hidden" name="transferMode" value="manual">
                 <input type="hidden" name="idempotencyKey" value="<%= java.util.UUID.randomUUID().toString() %>">
 
                 <div class="form-group" style="margin-bottom: 20px;">
@@ -147,13 +148,16 @@
             
             <!-- STAGE A: QR SCAN / SELECTION VIEW -->
             <div id="qrScannerStage">
-                <!-- QR Sub-tabs (Camera, Upload, Quick Directory) -->
+                <!-- QR Sub-tabs (Camera, Upload, Quick Directory, Paste) -->
                 <div class="qr-methods-nav">
                     <button type="button" class="qr-method-tab active" id="tabCamera">
                         <span>📷</span> Camera Scan
                     </button>
                     <button type="button" class="qr-method-tab" id="tabUpload">
                         <span>📁</span> Upload Image
+                    </button>
+                    <button type="button" class="qr-method-tab" id="tabPaste">
+                        <span>📋</span> Paste Code
                     </button>
                     <button type="button" class="qr-method-tab" id="tabDirectory">
                         <span>⚡</span> Quick Payees
@@ -190,7 +194,22 @@
                     <div id="uploadFeedback" style="text-align: center; font-size: 0.85rem; color: #dc2626; min-height: 1.25rem;"></div>
                 </div>
 
-                <!-- 3. Quick Payee Directory (Fast 1-click Pay) -->
+                <!-- 3. Direct Paste / Code View -->
+                <div id="viewPaste" class="qr-method-view" style="display: none;">
+                    <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; text-align: left; max-width: 600px; margin: 0 auto 1.5rem auto;">
+                        <label for="qrRawTextInput" style="font-weight: 600; display: block; margin-bottom: 0.5rem; color: #0f172a;">
+                            Paste QR Payload, FinSight URI, or Account Number:
+                        </label>
+                        <input type="text" id="qrRawTextInput" class="form-control" placeholder="e.g. FS-4183970722 or finsight://pay?acc=FS-4183970722" style="font-family: monospace; font-size: 0.95rem; margin-bottom: 1rem;">
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button type="button" class="btn btn-primary" id="btnProcessPaste" style="font-weight: 600;">
+                                ⚡ Process QR & Continue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Quick Payee Directory (Fast 1-click Pay) -->
                 <div id="viewDirectory" class="qr-method-view" style="display: none;">
                     <div class="quick-payees-wrapper">
                         <div class="quick-payees-header">
@@ -245,10 +264,13 @@
                     </button>
                 </div>
 
+                <div id="qrSelfTransferAlert" class="alert alert-warning" style="display: none; margin-bottom: 15px;"></div>
+
                 <!-- Fast Execution Form -->
                 <form action="${pageContext.request.contextPath}/banking" method="post" id="qrTransferForm">
                     <input type="hidden" name="csrfToken" value="${csrfToken}">
                     <input type="hidden" name="action" value="transfer">
+                    <input type="hidden" name="transferMode" value="qr">
                     <input type="hidden" name="idempotencyKey" value="<%= java.util.UUID.randomUUID().toString() %>">
                     <input type="hidden" id="qrRecipientAccount" name="recipientAccountNumber" value="">
 
@@ -256,7 +278,7 @@
                         <label for="qrSourceAccount" style="font-weight: 600;">From: Source Account</label>
                         <select id="qrSourceAccount" name="sourceAccountId" class="form-control" required>
                             <c:forEach var="acc" items="${accounts}">
-                                <option value="${acc.id}">
+                                <option value="${acc.id}" data-acc="${acc.accountNumber}" ${paramSourceAccountId == acc.id ? 'selected' : ''}>
                                     <c:out value="${acc.accountNumber}"/> (<c:out value="${acc.accountType}"/>) — Balance: ₹<fmt:formatNumber value="${acc.balance}" minFractionDigits="2"/>
                                 </option>
                             </c:forEach>
@@ -294,7 +316,7 @@
                                required pattern="\d{4,6}" maxlength="6" placeholder="Enter 4–6 digit PIN" autocomplete="off">
                     </div>
 
-                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 1rem; font-weight: 700; background: #16a34a; border-color: #16a34a;">
+                    <button type="submit" id="qrSubmitBtn" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 1rem; font-weight: 700; background: #16a34a; border-color: #16a34a;">
                         ⚡ Complete Instant Transfer
                     </button>
                 </form>
@@ -376,6 +398,7 @@
     </div>
 
     <!-- Scripts -->
+    <script src="${pageContext.request.contextPath}/js/jsqr.min.js"></script>
     <script src="${pageContext.request.contextPath}/js/qrcode.min.js"></script>
     <script src="${pageContext.request.contextPath}/js/qr-scanner.js"></script>
     <script>
@@ -411,6 +434,18 @@
 
         manualModeBtn.addEventListener('click', () => switchMode('manual'));
         qrModeBtn.addEventListener('click', () => switchMode('qr'));
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialMode = '${paramTransferMode != null ? paramTransferMode : param.mode}';
+        const initialRecipient = '<c:out value="${paramRecipientAccountNumber != null ? paramRecipientAccountNumber : ''}"/>';
+        const initialAmount = '<c:out value="${paramAmount != null ? paramAmount : ''}"/>';
+
+        if (initialMode === 'qr' || urlParams.get('mode') === 'qr') {
+            switchMode('qr');
+            if (initialRecipient) {
+                setTimeout(() => handleQrPayload(initialRecipient), 200);
+            }
+        }
 
         // -------------------------------------------------------------
         // 2. Manual Mode Live Account Lookup / Validation
@@ -473,32 +508,59 @@
         // -------------------------------------------------------------
         const tabCamera = document.getElementById('tabCamera');
         const tabUpload = document.getElementById('tabUpload');
+        const tabPaste = document.getElementById('tabPaste');
         const tabDirectory = document.getElementById('tabDirectory');
         const viewCamera = document.getElementById('viewCamera');
         const viewUpload = document.getElementById('viewUpload');
+        const viewPaste = document.getElementById('viewPaste');
         const viewDirectory = document.getElementById('viewDirectory');
+        const btnProcessPaste = document.getElementById('btnProcessPaste');
+        const qrRawTextInput = document.getElementById('qrRawTextInput');
 
         function switchQrMethod(method) {
-            [tabCamera, tabUpload, tabDirectory].forEach(t => t.classList.remove('active'));
-            [viewCamera, viewUpload, viewDirectory].forEach(v => v.style.display = 'none');
+            [tabCamera, tabUpload, tabPaste, tabDirectory].forEach(t => t && t.classList.remove('active'));
+            [viewCamera, viewUpload, viewPaste, viewDirectory].forEach(v => v && (v.style.display = 'none'));
 
             if (method === 'camera') {
-                tabCamera.classList.add('active');
-                viewCamera.style.display = 'block';
+                if (tabCamera) tabCamera.classList.add('active');
+                if (viewCamera) viewCamera.style.display = 'block';
             } else if (method === 'upload') {
-                tabUpload.classList.add('active');
-                viewUpload.style.display = 'block';
+                if (tabUpload) tabUpload.classList.add('active');
+                if (viewUpload) viewUpload.style.display = 'block';
                 if (qrScanner) qrScanner.stopCamera();
+            } else if (method === 'paste') {
+                if (tabPaste) tabPaste.classList.add('active');
+                if (viewPaste) viewPaste.style.display = 'block';
+                if (qrScanner) qrScanner.stopCamera();
+                if (qrRawTextInput) qrRawTextInput.focus();
             } else if (method === 'directory') {
-                tabDirectory.classList.add('active');
-                viewDirectory.style.display = 'block';
+                if (tabDirectory) tabDirectory.classList.add('active');
+                if (viewDirectory) viewDirectory.style.display = 'block';
                 if (qrScanner) qrScanner.stopCamera();
             }
         }
 
-        tabCamera.addEventListener('click', () => switchQrMethod('camera'));
-        tabUpload.addEventListener('click', () => switchQrMethod('upload'));
-        tabDirectory.addEventListener('click', () => switchQrMethod('directory'));
+        if (tabCamera) tabCamera.addEventListener('click', () => switchQrMethod('camera'));
+        if (tabUpload) tabUpload.addEventListener('click', () => switchQrMethod('upload'));
+        if (tabPaste) tabPaste.addEventListener('click', () => switchQrMethod('paste'));
+        if (tabDirectory) tabDirectory.addEventListener('click', () => switchQrMethod('directory'));
+
+        if (btnProcessPaste && qrRawTextInput) {
+            btnProcessPaste.addEventListener('click', () => {
+                const val = qrRawTextInput.value.trim();
+                if (!val) {
+                    alert('Please paste an account number or FinSight QR link.');
+                    return;
+                }
+                handleQrPayload(val);
+            });
+            qrRawTextInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    btnProcessPaste.click();
+                }
+            });
+        }
 
         // Initialize QR Scanner Engine
         const qrVideo = document.getElementById('qrVideo');
@@ -609,17 +671,60 @@
 
                     if (parsed.amount && parsed.amount > 0) {
                         qrAmount.value = parsed.amount.toFixed(2);
-                    } else {
-                        qrAmount.value = '';
+                    } else if (initialAmount && !qrAmount.value) {
+                        qrAmount.value = initialAmount;
                     }
 
                     if (parsed.description) {
                         qrDescription.value = parsed.description;
                     }
 
+                    // Check source vs recipient account
+                    const sourceSelect = document.getElementById('qrSourceAccount');
+                    const qrSelfTransferAlert = document.getElementById('qrSelfTransferAlert');
+                    const qrSubmitBtn = document.getElementById('qrSubmitBtn');
+
+                    function checkSelfTransfer() {
+                        if (!sourceSelect) return;
+                        const selectedOpt = sourceSelect.options[sourceSelect.selectedIndex];
+                        const sourceAccNo = selectedOpt ? (selectedOpt.getAttribute('data-acc') || selectedOpt.text.split(' ')[0].trim()) : '';
+                        if (sourceAccNo && sourceAccNo.toUpperCase() === result.accountNumber.toUpperCase()) {
+                            let switched = false;
+                            for (let i = 0; i < sourceSelect.options.length; i++) {
+                                const opt = sourceSelect.options[i];
+                                const optAcc = opt.getAttribute('data-acc') || opt.text.split(' ')[0].trim();
+                                if (optAcc.toUpperCase() !== result.accountNumber.toUpperCase()) {
+                                    sourceSelect.selectedIndex = i;
+                                    switched = true;
+                                    break;
+                                }
+                            }
+                            if (!switched) {
+                                if (qrSelfTransferAlert) {
+                                    qrSelfTransferAlert.innerHTML = '⚠️ <strong>Same Account Warning:</strong> You cannot transfer funds from ' + escapeHtml(sourceAccNo) + ' to itself. Please select or scan another recipient account.';
+                                    qrSelfTransferAlert.style.display = 'block';
+                                }
+                                if (qrSubmitBtn) qrSubmitBtn.disabled = true;
+                                return;
+                            }
+                        }
+                        if (qrSelfTransferAlert) qrSelfTransferAlert.style.display = 'none';
+                        if (qrSubmitBtn) qrSubmitBtn.disabled = false;
+                    }
+
+                    if (sourceSelect) {
+                        sourceSelect.removeEventListener('change', checkSelfTransfer);
+                        sourceSelect.addEventListener('change', checkSelfTransfer);
+                        checkSelfTransfer();
+                    }
+
                     // Transition UI to Confirmation Stage
                     qrScannerStage.style.display = 'none';
                     qrConfirmationStage.style.display = 'block';
+
+                    if (qrAmount.value) {
+                        triggerQrBudgetCheck();
+                    }
 
                     // Focus on Amount or PIN
                     setTimeout(() => {

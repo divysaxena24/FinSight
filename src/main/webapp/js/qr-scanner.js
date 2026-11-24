@@ -108,7 +108,7 @@
         }
 
         async decodeFrame(source) {
-            // 1. Try Native BarcodeDetector first
+            // 1. Try Native BarcodeDetector if available
             if (this.detector) {
                 try {
                     const barcodes = await this.detector.detect(source);
@@ -116,25 +116,36 @@
                         return barcodes[0].rawValue.trim();
                     }
                 } catch (e) {
-                    // Fall back to canvas processing
+                    // Fall back to jsQR
                 }
             }
 
-            // 2. Try window.jsQR if loaded
+            // 2. Decode using bundled pure JavaScript jsQR engine
             if (window.jsQR) {
-                const width = source.videoWidth || source.naturalWidth || source.width;
-                const height = source.videoHeight || source.naturalHeight || source.height;
-                if (width && height) {
-                    this.canvas.width = width;
-                    this.canvas.height = height;
-                    this.ctx.drawImage(source, 0, 0, width, height);
-                    const imageData = this.ctx.getImageData(0, 0, width, height);
-                    const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
-                        inversionAttempts: 'dontInvert'
-                    });
-                    if (code && code.data) {
-                        return code.data.trim();
+                try {
+                    let width = source.videoWidth || source.naturalWidth || source.width;
+                    let height = source.videoHeight || source.naturalHeight || source.height;
+                    if (width && height) {
+                        // Scale down oversized images for rapid, responsive decoding
+                        const maxDim = 1200;
+                        if (width > maxDim || height > maxDim) {
+                            const scale = Math.min(maxDim / width, maxDim / height);
+                            width = Math.max(1, Math.round(width * scale));
+                            height = Math.max(1, Math.round(height * scale));
+                        }
+                        this.canvas.width = width;
+                        this.canvas.height = height;
+                        this.ctx.drawImage(source, 0, 0, width, height);
+                        const imageData = this.ctx.getImageData(0, 0, width, height);
+                        const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
+                            inversionAttempts: 'attemptBoth'
+                        });
+                        if (code && code.data && code.data.trim()) {
+                            return code.data.trim();
+                        }
                     }
+                } catch (err) {
+                    console.warn('[FinSightQR] jsQR frame processing error:', err);
                 }
             }
 
@@ -199,7 +210,7 @@
     const FinSightQRPayload = {
         parse: function(raw) {
             if (!raw || typeof raw !== 'string') return null;
-            const str = raw.trim();
+            let str = raw.trim().replace(/^["']|["']$/g, '');
 
             // Format 1: JSON payload {"accountNumber":"FS-...","name":"...","amount":...}
             if (str.startsWith('{') && str.endsWith('}')) {
@@ -207,7 +218,7 @@
                     const obj = JSON.parse(str);
                     if (obj.accountNumber || obj.acc) {
                         return {
-                            accountNumber: (obj.accountNumber || obj.acc).trim().toUpperCase(),
+                            accountNumber: (obj.accountNumber || obj.acc).replace(/\s+/g, '').toUpperCase(),
                             name: obj.name || obj.holderName || '',
                             amount: obj.amount ? parseFloat(obj.amount) : null,
                             description: obj.description || obj.note || obj.desc || 'QR Instant Transfer'
@@ -223,7 +234,7 @@
                 const acc = params.get('acc') || params.get('account') || params.get('accountNumber');
                 if (acc) {
                     return {
-                        accountNumber: acc.trim().toUpperCase(),
+                        accountNumber: acc.replace(/\s+/g, '').toUpperCase(),
                         name: params.get('name') || '',
                         amount: params.get('am') || params.get('amount') ? parseFloat(params.get('am') || params.get('amount')) : null,
                         description: params.get('tn') || params.get('desc') || params.get('note') || 'FinSight QR Transfer'
@@ -237,7 +248,7 @@
                 const params = new URLSearchParams(queryStr);
                 const pa = params.get('pa') || '';
                 // pa could be FS-XXXXXXXX or FS-XXXXXXXX@finsight
-                const cleanAcc = pa.replace(/@.*$/, '').trim().toUpperCase();
+                const cleanAcc = pa.replace(/@.*$/, '').replace(/\s+/g, '').toUpperCase();
                 return {
                     accountNumber: cleanAcc,
                     name: params.get('pn') || '',
@@ -246,11 +257,11 @@
                 };
             }
 
-            // Format 4: Raw account number like FS-1234567890
-            const fsMatch = str.match(/(FS-[A-Za-z0-9\-_]+)/i);
+            // Format 4: Match account pattern like FS-1234567890 or FS - 1234567890
+            const fsMatch = str.match(/FS\s*-\s*([A-Za-z0-9\-_]+)/i);
             if (fsMatch) {
                 return {
-                    accountNumber: fsMatch[1].toUpperCase(),
+                    accountNumber: ('FS-' + fsMatch[1]).toUpperCase(),
                     name: '',
                     amount: null,
                     description: 'Direct QR Transfer'
@@ -259,7 +270,7 @@
 
             // Fallback: If it's a non-empty alphanumeric string
             return {
-                accountNumber: str.toUpperCase(),
+                accountNumber: str.replace(/\s+/g, '').toUpperCase(),
                 name: '',
                 amount: null,
                 description: 'QR Transfer'
